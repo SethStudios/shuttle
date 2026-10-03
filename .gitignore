@@ -45,3 +45,6 @@ app-example
 
 # local admin dashboard (hard-coded credentials — never commit)
 /admin-dashboard.html
+
+# supabase local CLI cache (project refs, pooler URLs — machine-local)
+supabase/.temp/
