@@ -5,6 +5,12 @@ const expoConfig = require('eslint-config-expo/flat');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/*'],
+    ignores: ['dist/*', 'supabase/*', 'scripts/*'],
+  },
+  {
+    files: ['utils/supabase.ts'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
   },
 ]);

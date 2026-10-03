@@ -1,50 +1,65 @@
-# Welcome to your Expo app 👋
+# UniAbuja Shuttle
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Expo (SDK 57) + Supabase + Paystack app for University of Abuja campus shuttle booking. Students buy a same-day boarding pass, get a QR ticket, and staff scan it at the terminal (one-time use).
 
-## Get started
+## Quick start
 
-1. Install dependencies
-
+1. Install dependencies:
    ```bash
    npm install
    ```
-
-2. Start the app
-
+2. Copy env template and fill in real values (never commit `.env`):
+   ```bash
+   cp .env.example .env
+   ```
+3. Start:
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+## Scripts
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+| Script | Purpose |
+|---|---|
+| `npm test` | Pure-logic unit tests (no network/device) |
+| `npm run test:smoke` | Static consistency checks (fares, routes, RLS objects) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | `expo lint` (ESLint 9 + `eslint-config-expo/flat`) |
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Environment & secrets
 
-## Get a fresh project
+- Client config comes from `EXPO_PUBLIC_` vars (`.env` locally, EAS environments in cloud builds). See `.env.example`.
+- Nothing secret lives in `app.json` — the Supabase anon/publishable key is public-by-design.
+- Never put `service_role` or Paystack secret keys in the app. They live in Supabase Edge Function secrets only.
+- Cloud builds: `eas.json` maps each profile to its EAS environment (`development`/`preview`/`production`):
+  ```bash
+  eas env:set --name EXPO_PUBLIC_SUPABASE_URL --value https://your-project.supabase.co --environment production --visibility plaintext
+  eas env:set --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value <anon-key> --environment production --visibility plaintext
+  ```
 
-When you're ready, run:
+## Ticket validity (canonical rule)
 
-```bash
-npm run reset-project
-```
+A pass **admits** at the checkpoint iff ALL hold:
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+1. `payment_status = 'paid'` (confirmed via Paystack server-side)
+2. `ticket_status = 'unused'` (consumed on first valid scan — one-time use)
+3. Purchased within the last **24 hours**
+4. `travel_date` **equals today** (backend stamps the server day at purchase)
 
-## Learn more
+Home "active" is the looser owned-and-live set (1–3 plus `travel_date >= today`); the scanner's same-day gate is stricter. The **boarding period** only organizes the queue (numbers restart hourly) and guides arrival — it is not a scan-time gate. One active pass per route direction.
 
-To learn more about developing your project with Expo, look at the following resources:
+Implementation: `isTicketActive` in `utils/tickets.ts`; enforced at scan in `app/scan.tsx` (`buildReport`), listed in `hooks/useBookings.ts`.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Backend
 
-## Join the community
+- Schema + RLS in `supabase-setup.sql` (clients hold no write grants on bookings; all writes via `SECURITY DEFINER` RPCs).
+- Edge Functions in `supabase/functions/`: `paystack-init` (public-only sales), `paystack-verify`, `paystack-webhook` (HMAC, legacy private tickets still verify). Server is the source of truth for fares (₦500 public flat, no fee; ₦700 private kept for legacy verification only). Monthly subscription is ₦1,000 via `paystack-sub-init` / `paystack-sub-verify` and is required to book (students only, staff exempt).
+- Setup details: `supabase/README.md`.
 
-Join our community of developers creating universal apps.
+## Project layout
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- `app/` — expo-router screens (booking → payment → ticket → scan)
+- `utils/tickets.ts` — pure ticket helpers (parsing, validity, verify messages)
+- `services/payment.ts` — Paystack Edge Function facade (no secrets)
+- `hooks/useBookings.ts` — active/history bookings (Supabase + user-scoped device cache)
+- `contexts/AuthContext.tsx` — session validation, sign-out cache wipe

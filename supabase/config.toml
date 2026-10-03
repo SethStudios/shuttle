@@ -1,0 +1,19 @@
+[project]
+id = "uniabuja-shuttle"
+
+[functions.paystack-init]
+verify_jwt = true
+
+[functions.paystack-verify]
+verify_jwt = true
+
+# Webhook is called by Paystack servers (no user JWT).
+# Auth = HMAC x-paystack-signature verified inside the function.
+[functions.paystack-webhook]
+verify_jwt = false
+
+[functions.paystack-sub-init]
+verify_jwt = true
+
+[functions.paystack-sub-verify]
+verify_jwt = true
