@@ -11,11 +11,11 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { SUBSCRIPTION, formatSubscriptionPrice } from '@/constants/subscription';
 import { initializePayment, verifyPayment, type PaymentStatus, type PaymentInitResult } from '@/services/payment';
 import { saveDevBooking } from '@/hooks/useBookings';
-import { getVerifyErrorMessage, shouldAutoRetryVerify } from '@/utils/tickets';
+import { getVerifyErrorMessage } from '@/utils/tickets';
 import { scheduleBoardingReminder } from '@/services/notifications';
 import { UniAbujaGreen } from '@/constants/theme';
 import { AppleButton } from '@/components/ui/Apple';
-import { CALLBACK_BASE, VERIFY_RETRY_MS } from '@/constants/app';
+import { CALLBACK_BASE } from '@/constants/app';
 
 const GREEN = UniAbujaGreen[700];
 const PAYSTACK_HOSTS = ['paystack.com', 'paystack.co'];
@@ -57,11 +57,6 @@ export default function PaymentScreen() {
 
   const [lastReference, setLastReference] = useState('');
   const handledRef = useRef<string | null>(null);
-  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => {
-    if (retryTimer.current) clearTimeout(retryTimer.current);
-  }, []);
 
   const cancelCheckout = useCallback(() => {
     processingRef.current = false;
@@ -156,22 +151,9 @@ export default function PaymentScreen() {
           }).catch(() => {});
         }
       } else {
-        // Keep the guard set: the second WebView callback for this same
-        // reference must not double-verify. Manual retry resets it first.
         const msg = getVerifyErrorMessage(result.reason);
         setStatus('failed');
         setErrorMessage(msg);
-        // One auto-retry for Paystack-side lag (transfer/USSD confirms late).
-        if (shouldAutoRetryVerify(result.reason)) {
-          if (retryTimer.current) clearTimeout(retryTimer.current);
-          retryTimer.current = setTimeout(() => {
-            handledRef.current = null;
-            // Deferred self-call: this runs after commit, long after the
-            // const above is initialized — safe despite the lexical order.
-            // eslint-disable-next-line react-hooks/immutability
-            handleVerify(reference);
-          }, VERIFY_RETRY_MS);
-        }
       }
     } catch (err: any) {
       setStatus('error');

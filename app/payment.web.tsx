@@ -14,11 +14,10 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { SUBSCRIPTION, formatSubscriptionPrice } from '@/constants/subscription';
 import { initializePayment, verifyPayment, type PaymentStatus, type PaymentInitResult } from '@/services/payment';
 import { saveDevBooking } from '@/hooks/useBookings';
-import { getVerifyErrorMessage, shouldAutoRetryVerify } from '@/utils/tickets';
+import { getVerifyErrorMessage } from '@/utils/tickets';
 import { scheduleBoardingReminder } from '@/services/notifications';
 import { UniAbujaGreen } from '@/constants/theme';
 import { AppleButton } from '@/components/ui/Apple';
-import { VERIFY_RETRY_MS } from '@/constants/app';
 
 const GREEN = UniAbujaGreen[700];
 const CALLBACK_BASE = 'https://uniabujashuttle.app/payment-callback';
@@ -57,7 +56,6 @@ export default function PaymentScreenWeb() {
 
   const [lastReference, setLastReference] = useState('');
   const handledRef = useRef<string | null>(null);
-  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processingRef = useRef(false);
   const mountedRef = useRef(true);
 
@@ -75,10 +73,6 @@ export default function PaymentScreenWeb() {
       }
     }
     return () => { mountedRef.current = false; };
-  }, []);
-
-  useEffect(() => () => {
-    if (retryTimer.current) clearTimeout(retryTimer.current);
   }, []);
 
   const cancelCheckout = useCallback(() => {
@@ -153,13 +147,6 @@ export default function PaymentScreenWeb() {
         const msg = getVerifyErrorMessage(result.reason);
         setStatus('failed');
         setErrorMessage(msg);
-        if (shouldAutoRetryVerify(result.reason)) {
-          if (retryTimer.current) clearTimeout(retryTimer.current);
-          retryTimer.current = setTimeout(() => {
-            handledRef.current = null;
-            handleVerify(reference);
-          }, VERIFY_RETRY_MS);
-        }
       }
     } catch (err: any) {
       if (mountedRef.current) {
