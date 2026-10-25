@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
 import { WebView, type WebViewNavigation } from 'react-native-webview';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -25,6 +25,7 @@ export default function SubscriptionScreen() {
   const [checkoutUrl, setCheckoutUrl] = useState('');
   const [reference, setReference] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const handledRef = useRef<string | null>(null);
 
   const start = useCallback(async () => {
     const email = user?.email || '';
@@ -33,6 +34,7 @@ export default function SubscriptionScreen() {
       setErrorMessage('Please sign in to subscribe.');
       return;
     }
+    handledRef.current = null;
     setStatus('initializing');
     setErrorMessage('');
     try {
@@ -48,7 +50,8 @@ export default function SubscriptionScreen() {
 
   const verify = useCallback(
     async (ref: string) => {
-      if (!ref) return;
+      if (!ref || handledRef.current === ref) return;
+      handledRef.current = ref;
       setStatus('verifying');
       try {
         const result = await verifySubscription(ref);
@@ -206,7 +209,7 @@ export default function SubscriptionScreen() {
         ) : (
           <>
             {status === 'error' ? <Text style={styles.err}>{errorMessage}</Text> : null}
-            <AppleButton title={active ? `Renew (${formatSubscriptionPrice(SUBSCRIPTION.price)})` : `Subscribe (${formatSubscriptionPrice(SUBSCRIPTION.price)})`} icon="lock" onPress={start} />
+            <AppleButton title={active ? `Cancel Subscription` : `Subscribe (${formatSubscriptionPrice(SUBSCRIPTION.price)})`} icon="lock" onPress={() => { if (!active) start(); }} />
             {reference ? <AppleButton title="I've paid — verify" variant="plain" onPress={() => verify(reference)} /> : null}
             <Text style={styles.note}>You will be taken to Paystack to pay with card, transfer or USSD. Your subscription activates instantly after payment.</Text>
           </>
