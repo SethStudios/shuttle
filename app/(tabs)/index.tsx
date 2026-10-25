@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useBookings } from '@/hooks/useBookings';
 import { useSubscription } from '@/hooks/useSubscription';
 import { SUBSCRIPTION, formatSubscriptionPrice } from '@/constants/subscription';
-import { formatPrice, formatPeriod12, getShuttlePrice } from '@/constants/pricing';
+import { formatPrice, formatPeriod12, getShuttlePrice, getShuttleLabel } from '@/constants/pricing';
 import { getUnreadCount, scheduleShuttleNotifications } from '@/services/notifications';
 import { UniAbujaGreen } from '@/constants/theme';
 
@@ -211,7 +211,7 @@ export default function HomeScreen() {
               </View>
               <View style={styles.passBody}>
                 <View>
-                  <Text style={styles.passType}>{t.shuttle_type === 'public' ? 'Public Shuttle' : 'Private Shuttle'}</Text>
+                  <Text style={styles.passType}>{getShuttleLabel(t.shuttle_type as 'public' | 'private')}</Text>
                   <Text style={styles.passMeta}>{fmt(t.travel_date)}{t.boarding_period ? ` • ${formatPeriod12(t.boarding_period)}` : ''}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>

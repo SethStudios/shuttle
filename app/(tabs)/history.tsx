@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { formatPrice, formatPeriod12, isWithinTicketLife } from '@/constants/pricing';
+import { formatPrice, formatPeriod12, isWithinTicketLife, getShuttleLabel } from '@/constants/pricing';
 import { useBookings, type Booking } from '@/hooks/useBookings';
 import { useAuth } from '@/contexts/AuthContext';
 import { UniAbujaGreen } from '@/constants/theme';
@@ -75,7 +75,7 @@ export default function TicketsScreen() {
               <MaterialIcons name={b.shuttle_type === 'public' ? 'directions-bus' : 'local-taxi'} size={20} color={GREEN} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.type}>{b.shuttle_type === 'public' ? 'Public Shuttle' : 'Private Shuttle'}</Text>
+              <Text style={styles.type}>{getShuttleLabel(b.shuttle_type as 'public' | 'private')}</Text>
               <Text style={styles.route} numberOfLines={1}>{b.route}</Text>
             </View>
           </View>

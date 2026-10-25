@@ -10,7 +10,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/contexts/AuthContext';
 import { SUBSCRIPTION, formatSubscriptionPrice } from '@/constants/subscription';
 import {
-  formatPrice, formatPeriod12, getShuttlePrice, getTotalPrice,
+  formatPrice, formatPeriod12, getShuttlePrice, getTotalPrice, getShuttleLabel, SHUTTLE_DESCRIPTIONS,
   type ShuttleType, type RouteDirection, BOARDING_PERIODS, getNextBoardingPeriod,
 } from '@/constants/pricing';
 import { TAP_DEBOUNCE_MS } from '@/constants/app';
@@ -22,7 +22,7 @@ const GREEN = UniAbujaGreen[700];
 export default function BookingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const type: ShuttleType = 'public';
+  const [type, setType] = useState<ShuttleType>('public');
   const [route, setRoute] = useState<RouteDirection>('main-to-mini');
   const [period, setPeriod] = useState(getNextBoardingPeriod());
   const total = type ? getTotalPrice(type) : 0;
@@ -35,9 +35,9 @@ export default function BookingScreen() {
   const goingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const subscriptionBlocked = !isStaff && !subLoading && !subActive;
 
-  // One active pass per route: a second pass for the same direction
-  // is blocked until the current one is used or expires.
-  const routeActive = loading ? undefined : activeBookings.find((b) => b.route_direction === route);
+  // One active pass per route + shuttle: a second pass for the same
+  // direction AND bus type is blocked until the current one is used or expires.
+  const routeActive = loading ? undefined : activeBookings.find((b) => b.route_direction === route && (b.shuttle_type as ShuttleType) === type);
 
   // Hide past boarding windows for today so users can't buy expired slots.
   const nowHour = new Date().getHours();
@@ -83,7 +83,7 @@ export default function BookingScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
       Alert.alert(
         'Subscription required',
-        `You need an active ${formatSubscriptionPrice(SUBSCRIPTION.price)} monthly subscription to book. Trip fare ${formatPrice(getShuttlePrice('public'))} still applies per ride.`,
+        `You need an active ${formatSubscriptionPrice(SUBSCRIPTION.price)} monthly subscription to book. Trip fare ${formatPrice(getShuttlePrice(type))} (${getShuttleLabel(type)}) still applies per ride.`,
         [
           { text: 'Subscribe', onPress: () => router.push('/subscription' as any) },
           { text: 'Cancel', style: 'cancel' },
@@ -226,25 +226,30 @@ export default function BookingScreen() {
         )}
 
         <Text style={styles.sec}>3 • Shuttle</Text>
-        <View style={[styles.opt, styles.optOn]}>
-          <View style={[styles.optIcon, styles.optIconOn]}>
-            <MaterialIcons name="directions-bus" size={25} color="#FFFFFF" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.optName}>Public Shuttle</Text>
-            <Text style={styles.optD}>University-operated • Main ⇄ Mini</Text>
-            <Text style={[styles.optP, styles.optPOn]}>{formatPrice(getShuttlePrice('public'))} • no service fee</Text>
-          </View>
-          <View style={[styles.radio, styles.radioOn]}>
-            <MaterialIcons name="check" size={15} color="#FFFFFF" />
-          </View>
-        </View>
+        {(['public', 'private'] as ShuttleType[]).map((t) => {
+          const on = type === t;
+          return (
+            <TouchableOpacity key={t} style={[styles.opt, on && styles.optOn]} onPress={() => pick(() => setType(t))} activeOpacity={0.85}>
+              <View style={[styles.optIcon, on && styles.optIconOn]}>
+                <MaterialIcons name="directions-bus" size={25} color={on ? '#FFFFFF' : GREEN} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.optName}>{getShuttleLabel(t)}</Text>
+                <Text style={styles.optD}>{SHUTTLE_DESCRIPTIONS[t]}</Text>
+                <Text style={[styles.optP, on && styles.optPOn]}>{formatPrice(getShuttlePrice(t))} • no service fee</Text>
+              </View>
+              <View style={[styles.radio, on && styles.radioOn]}>
+                {on ? <MaterialIcons name="check" size={15} color="#FFFFFF" /> : null}
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       <View style={[styles.bar, { paddingBottom: insets.bottom + 12 }]}>
         <View style={styles.barCard}>
           <View>
-            <Text style={styles.barLab}>Public • {formatPeriod12(period.label)}</Text>
+            <Text style={styles.barLab}>{getShuttleLabel(type)} • {formatPeriod12(period.label)}</Text>
             <Text style={styles.barTotal}>{type ? formatPrice(total) : '—'}</Text>
           </View>
           <TouchableOpacity style={[styles.go, (!type || loading || soldOut || (!isStaff && (subLoading || subscriptionBlocked))) && styles.goOff]} disabled={!type || loading || soldOut || (!isStaff && (subLoading || subscriptionBlocked))} onPress={go} activeOpacity={0.85}>

@@ -7,6 +7,7 @@
  *
  * To change pricing:
  *   Update the values here and redeploy the Edge Functions.
+ * Display names: public = CNG Bus, private = Petrol Bus (see constants/pricing.ts).
  */
 
 export const FARES = {

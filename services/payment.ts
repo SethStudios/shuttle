@@ -92,8 +92,8 @@ export async function initializePayment(params: {
   if (!email || !email.trim()) {
     throw new PaymentError('Email is required to process payment.');
   }
-  if (shuttleType !== 'public') {
-    throw new PaymentError('Private shuttles are discontinued. Please book the public shuttle.');
+  if (shuttleType !== 'public' && shuttleType !== 'private') {
+    throw new PaymentError('Unknown shuttle type. Please go back and choose your trip again.');
   }
 
   const routeLabel = routeDirection === 'mini-to-main'

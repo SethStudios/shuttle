@@ -94,7 +94,7 @@ export function describeInitError(input: {
   }
   if (backendCode === 'SUBSCRIPTION_REQUIRED' || status === 403) {
     return {
-      message: 'Active ₦1,000 monthly subscription required. Subscribe first, then pay the ₦500 trip fare.',
+      message: 'Active ₦1,000 monthly subscription required. Subscribe first, then pay the trip fare.',
       code: 'SUBSCRIPTION_REQUIRED',
     };
   }

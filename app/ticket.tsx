@@ -10,7 +10,7 @@ import { loadDevBookings } from '@/hooks/useBookings';
 import { useState, useCallback } from 'react';
 import { UniAbujaGreen } from '@/constants/theme';
 import { AppleButton } from '@/components/ui/Apple';
-import { formatPrice, formatPeriod12, getTotalPrice, isWithinTicketLife, hoursLeftInTicketLife } from '@/constants/pricing';
+import { formatPrice, formatPeriod12, getTotalPrice, isWithinTicketLife, hoursLeftInTicketLife, getShuttleLabel } from '@/constants/pricing';
 
 const GREEN = UniAbujaGreen[700];
 const W = Dimensions.get('window').width;
@@ -195,7 +195,7 @@ export default function TicketScreen() {
               <View style={styles.brandIcon}><MaterialIcons name="directions-bus" size={20} color="#FFFFFF" /></View>
               <View>
                 <Text style={styles.brandName}>UniAbuja Shuttle</Text>
-                <Text style={styles.brandSub}>{shuttleType === 'public' ? 'Public Shuttle' : 'Private Shuttle'}</Text>
+                <Text style={styles.brandSub}>{getShuttleLabel(shuttleType as 'public' | 'private')}</Text>
               </View>
             </View>
             <Text style={styles.route}>{routeLabel}</Text>

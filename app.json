@@ -31,7 +31,36 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro",
+      "manifest": {
+        "name": "UniAbuja Shuttle",
+        "short_name": "Shuttle",
+        "description": "UniAbuja campus shuttle booking and boarding",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#2F4035",
+        "theme_color": "#2E7D32",
+        "orientation": "portrait-primary",
+        "icons": [
+          {
+            "src": "/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+          },
+          {
+            "src": "/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+          }
+        ]
+      },
+      "serviceWorker": {
+        "src": "./public/sw.js",
+        "scope": "/"
+      }
     },
     "plugins": [
       "expo-router",

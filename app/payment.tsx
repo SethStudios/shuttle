@@ -5,7 +5,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { formatPrice, getShuttlePrice, getTotalPrice, type ShuttleType } from '@/constants/pricing';
+import { formatPrice, getShuttlePrice, getTotalPrice, getShuttleLabel, type ShuttleType } from '@/constants/pricing';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { SUBSCRIPTION, formatSubscriptionPrice } from '@/constants/subscription';
@@ -35,9 +35,9 @@ export default function PaymentScreen() {
   const isStaff = (user as any)?.user_metadata?.role === 'staff';
   const params = useLocalSearchParams<{ shuttleType?: string; route?: string; boardingPeriod?: string }>();
 
-  // Public-only sales (private discontinued). Legacy private tickets still verify/scan.
+  // CNG Bus (public ₦500) and Petrol Bus (private ₦700) — both bookable.
   const paramsValid =
-    params.shuttleType === 'public' &&
+    (params.shuttleType === 'public' || params.shuttleType === 'private') &&
     (params.route === 'main-to-mini' || params.route === 'mini-to-main') &&
     !!params.boardingPeriod &&
     /^\d{2}:00-\d{2}:00$/.test(params.boardingPeriod);
@@ -332,7 +332,7 @@ export default function PaymentScreen() {
               </View>
               <View style={styles.div} />
               {[
-                ['Shuttle', 'Public Shuttle'],
+                ['Shuttle', getShuttleLabel(shuttleType)],
                 ['Boarding window', boardingPeriod],
                 ['Shuttle fare', formatPrice(fare)],
               ].map(([k, v]) => (

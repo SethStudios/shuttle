@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>UniAbuja Shuttle — Admin Dashboard</title>
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand">
+      <div class="brand-icon" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10H4z"/><path d="M4 11h16"/><circle cx="7.5" cy="18" r="1.6"/><circle cx="16.5" cy="18" r="1.6"/><path d="M7 4v3M17 4v3"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">UniAbuja Shuttle</div>
+        <div class="brand-sub">Terminal operations</div>
+      </div>
+    </div>
+    <div class="nav-label">Operate</div>
+    <nav id="nav">
+      <button data-tab="overview" class="active"><span class="nav-dot"></span>Overview</button>
+      <button data-tab="manifest"><span class="nav-dot"></span>Manifest<span class="nav-badge" id="badge-manifest" hidden></span></button>
+      <button data-tab="validate"><span class="nav-dot"></span>Checkpoint</button>
+      <button data-tab="bookings"><span class="nav-dot"></span>Bookings</button>
+      <button data-tab="payments"><span class="nav-dot"></span>Payments<span class="nav-badge warn" id="badge-payments" hidden></span></button>
+    </nav>
+    <div class="nav-label">Manage</div>
+    <nav id="nav2">
+      <button data-tab="users"><span class="nav-dot"></span>Users</button>
+      <button data-tab="subscriptions"><span class="nav-dot"></span>Subscriptions</button>
+      <button data-tab="routes"><span class="nav-dot"></span>Routes &amp; fares</button>
+      <button data-tab="settings"><span class="nav-dot"></span>Settings</button>
+    </nav>
+    <div class="side-foot">
+      <div id="auth-state" class="muted">Not signed in</div>
+      <button id="btn-logout" class="btn ghost" hidden>Sign out</button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <!-- Login gate -->
+    <section id="login-card" class="card">
+      <h1>Staff sign in</h1>
+      <p class="muted">Shared staff account. Anyone with the email + password can view bookings and validate tickets — non-staff accounts are rejected.</p>
+      <div class="row">
+        <label>Email<input id="login-email" type="email" value="uniabujashuttle@gmail.com" autocomplete="username" /></label>
+        <label>Password<input id="login-pass" type="password" placeholder="Enter staff password" autocomplete="current-password" /></label>
+      </div>
+      <div class="row">
+        <button id="btn-login" class="btn primary">Sign in</button>
+      </div>
+      <p id="login-error" class="error" hidden></p>
+    </section>
+
+    <!-- Authenticated views -->
+    <div id="views" hidden>
+      <header id="topbar">
+        <div>
+          <h1 id="view-title">Overview</h1>
+          <p id="view-sub" class="muted"></p>
+        </div>
+        <div class="row top-actions">
+          <span id="staff-chip" class="staff-chip" hidden></span>
+          <input id="global-date" type="date" title="Operating date" />
+          <button id="btn-refresh" class="btn">Refresh</button>
+          <span id="data-fresh" class="muted small"></span>
+        </div>
+      </header>
+
+      <section id="view-overview" class="view">
+        <p id="day-summary" class="day-summary"></p>
+        <div id="kpis" class="kpis"></div>
+        <div class="grid2">
+          <div class="card"><h2>Revenue by bus <span class="h2-sub">paid · selected date</span></h2><div id="rev-split"></div></div>
+          <div class="card"><h2>Boarding progress <span class="h2-sub">boarded vs sold per window</span></h2><div id="period-bars"></div></div>
+        </div>
+        <div class="grid2">
+          <div class="card"><h2>Latest bookings <span class="h2-sub">most recent first</span></h2><div id="recent-list"></div></div>
+          <div class="card"><h2>Needs attention</h2><div id="attention"></div></div>
+        </div>
+      </section>
+
+      <section id="view-manifest" class="view" hidden>
+        <div class="card">
+          <div class="card-head">
+            <h2>Boarding manifest — <span id="manifest-date"></span></h2>
+            <div class="row">
+              <button id="btn-manifest-print" class="btn">Print</button>
+              <button id="btn-manifest-csv" class="btn">Export CSV</button>
+            </div>
+          </div>
+          <p class="muted small">Queue numbers restart every hour, per bus and direction. “To board” = paid + unused. Refresh after each window departs.</p>
+          <div class="row filters">
+            <select id="manifest-route"><option value="">All routes</option><option>Main Campus → Mini Campus</option><option>Mini Campus → Main Campus</option></select>
+            <select id="manifest-type"><option value="">CNG + Petrol</option><option value="public">CNG Bus only</option><option value="private">Petrol Bus only</option></select>
+            <select id="manifest-status"><option value="paid-unused">Paid &amp; unused (to board)</option><option value="paid-all">All paid</option><option value="used">Boarded (used)</option></select>
+            <button id="btn-manifest-csv" class="btn">Export CSV</button>
+          </div>
+          <div id="manifest-groups"></div>
+        </div>
+      </section>
+
+      <section id="view-validate" class="view" hidden>
+        <div class="card">
+          <h2>Ticket checkpoint</h2>
+          <p class="muted">Same rule as the mobile scanner: <code>paid + unused + &lt;24h + travel_date = today</code>. Valid scans are consumed immediately via <code>mark_ticket_used</code> (one-time use).</p>
+          <div class="row">
+            <input id="validate-input" placeholder="TKT-20260101-ABC123 or legacy JSON" spellcheck="false" />
+            <button id="btn-validate" class="btn primary">Check</button>
+            <button id="btn-consume" class="btn danger" disabled>Admit &amp; consume</button>
+          </div>
+          <div id="validate-result"></div>
+        </div>
+      </section>
+
+      <section id="view-bookings" class="view" hidden>
+        <div class="card">
+          <h2>Bookings</h2>
+          <div class="row filters">
+            <input id="q-bookings" placeholder="Search ticket_id / reference / route" />
+            <select id="f-pay"><option value="">Any payment</option><option value="paid">paid</option><option value="pending">pending</option><option value="failed">failed</option><option value="cancelled">cancelled</option></select>
+            <select id="f-ticket"><option value="">Any ticket</option><option value="unused">unused</option><option value="used">used</option><option value="cancelled">cancelled</option></select>
+            <select id="f-type"><option value="">CNG + Petrol</option><option value="public">CNG Bus</option><option value="private">Petrol Bus</option></select>
+            <button id="btn-bookings-csv" class="btn">Export CSV</button>
+          </div>
+          <div class="table-wrap"><table id="tbl-bookings"><thead><tr>
+            <th>Ticket</th><th>Rider</th><th>Contact</th><th>Bus</th><th>Route</th><th>Window</th><th>Q#</th><th>Amount</th><th>Pay</th><th>Ticket</th><th>Travel</th><th>Created</th>
+          </tr></thead><tbody></tbody></table></div>
+          <p class="muted small">Latest 100 matching rows. Writes go through Edge Functions / RPCs only — this table is read-only.</p>
+        </div>
+      </section>
+
+      <section id="view-users" class="view" hidden>
+        <div class="card">
+          <h2>Users</h2>
+          <div class="row filters">
+            <input id="q-users" placeholder="Search name / matric / email" />
+            <select id="f-role"><option value="">All roles</option><option value="student">students</option><option value="staff">staff</option></select>
+          </div>
+          <div class="table-wrap"><table id="tbl-users"><thead><tr>
+            <th>Name</th><th>Role</th><th>Matric</th><th>Email</th><th>Phone</th><th>Joined</th>
+          </tr></thead><tbody></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="view-subscriptions" class="view" hidden>
+        <div class="card">
+          <h2>Subscriptions — ₦1,000 / 30 days</h2>
+          <div id="sub-notice"></div>
+          <div class="row filters">
+            <select id="f-sub"><option value="">All statuses</option><option value="active">active</option><option value="pending">pending</option><option value="expired">expired</option><option value="failed">failed</option></select>
+          </div>
+          <div class="table-wrap"><table id="tbl-subs"><thead><tr>
+            <th>User</th><th>Amount</th><th>Status</th><th>Starts</th><th>Expires</th><th>Reference</th>
+          </tr></thead><tbody></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="view-routes" class="view" hidden>
+        <div class="card"><h2>Fares (server truth)</h2><div id="fare-cards" class="fare-cards"></div>
+          <p class="muted small">Fares are enforced by Edge Functions (<code>FARES</code>), not editable here. Frontend figures are display-only.</p></div>
+        <div class="card"><h2>Shuttle routes table</h2><div id="routes-list"></div></div>
+      </section>
+
+      <section id="view-payments" class="view" hidden>
+        <div class="card">
+          <h2>Payments reconciliation</h2>
+          <p class="muted">Unverified money lives here: <code>pending/failed</code> bookings and Paystack references. Confirm status in the Paystack dashboard, then ask riders to tap “I’ve paid — verify” in-app (verify RPC is the only path to <code>paid</code>).</p>
+          <div class="row filters">
+            <input id="q-pay" placeholder="Search paystack reference" />
+          </div>
+          <div class="table-wrap"><table id="tbl-pay"><thead><tr>
+            <th>Reference</th><th>Rider</th><th>Contact</th><th>Bus</th><th>Amount</th><th>Status</th><th>Waiting</th><th>Created</th>
+          </tr></thead><tbody></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="view-settings" class="view" hidden>
+        <div class="card">
+          <h2>Connection</h2>
+          <p id="conn-status" class="muted"></p>
+          <p class="muted small">Connection lives in <code>admin/config.js</code> (gitignored, this PC only — copy from <code>config.example.js</code>). No passwords or secret keys are stored in the dashboard code.</p>
+        </div>
+        <div class="card">
+          <h2>Staff RLS checklist</h2>
+<pre class="code">-- Staff reads (already in supabase-setup.sql):
+--   bookings:  POLICY "Staff can view all bookings" USING (is_staff())
+--   profiles:  POLICY "Staff can view rider profiles" USING (uid = id OR is_staff())
+--   scan:      GRANT EXECUTE mark_ticket_used TO authenticated
+--
+-- Missing: subscriptions have NO staff read policy (own-rows only).
+-- To let staff see all subscriptions, run once in SQL Editor:
+CREATE POLICY "Staff can view all subscriptions"
+  ON public.subscriptions FOR SELECT USING (public.is_staff());</pre>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<script src="./config.js"></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

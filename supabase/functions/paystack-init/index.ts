@@ -27,7 +27,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // ── Pricing (inlined — self-contained) ──────────────────────────
 // Deploys as-is from the Dashboard editor (single file only).
 // Keep in sync with _shared/pricing.ts and constants/pricing.ts:
-//   public shuttle = ₦500 fare. No service fee. Private discontinued (legacy verify only).
+//   public = CNG Bus ₦500 fare. private = Petrol Bus ₦700 fare. No service fee.
 const FARES = {
   public: { fare: 500, serviceFee: 0 },
   private: { fare: 700, serviceFee: 0 },
@@ -96,8 +96,8 @@ serve(async (req: Request) => {
     }
     const { shuttle_type, email, boarding_period, route } = body as Record<string, string>;
 
-    if (shuttle_type !== 'public') {
-      return json({ error: 'Private shuttles are discontinued. Please book the public shuttle.' }, 400);
+    if (shuttle_type !== 'public' && shuttle_type !== 'private') {
+      return json({ error: 'Unknown shuttle type. Please choose your trip again.' }, 400);
     }
 
     const validPeriodRegex = /^\d{2}:00-\d{2}:00$/;

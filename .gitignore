@@ -46,5 +46,8 @@ app-example
 # local admin dashboard (hard-coded credentials — never commit)
 /admin-dashboard.html
 
+# machine-local admin connection (URL + anon key for this PC only)
+admin/config.js
+
 # supabase local CLI cache (project refs, pooler URLs — machine-local)
 supabase/.temp/

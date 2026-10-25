@@ -12,38 +12,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/utils/supabase';
-import { parseTicketId } from '@/utils/tickets';
-import { formatPrice, formatPeriod12, isWithinTicketLife } from '@/constants/pricing';
-import { cancelBoardingReminder } from '@/services/notifications';
+import { verifyTicketCode, ScanReport, loadScanHistory, pushScanHistory, parseTicketId, saveScanHistory } from '@/utils/scanValidation';
 import { UniAbujaGreen } from '@/constants/theme';
 import { AppleButton } from '@/components/ui/Apple';
 
 const GREEN = UniAbujaGreen[700];
-const todayStr = () => new Date().toISOString().slice(0, 10);
-
-type Report = {
-  status: 'valid' | 'used' | 'boarded' | 'invalid';
-  title: string;
-  message: string;
-  name?: string;
-  meta?: string;
-  route?: string;
-  boarding?: string;
-  queue?: string;
-  paid?: string;
-  bookingId?: string;
-  ticketId?: string;
-  /** Set when the ticket was valid but could not be consumed — Retry re-verifies this code. */
-  retryCode?: string;
-};
 
 type ScanEntry = { code: string; time: string; result: 'ADMIT' | 'DENY' | 'USED' };
 
 const SCAN_HISTORY_KEY = '@scan_history';
-
-/** Re-exported for tests — implementation lives in utils/tickets. */
-export { parseTicketId };
 
 export default function ScanScreen() {
   const insets = useSafeAreaInsets();
@@ -52,19 +29,15 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [manual, setManual] = useState('');
   const [checking, setChecking] = useState(false);
-  const [report, setReport] = useState<Report | null>(null);
+  const [report, setReport] = useState<ScanReport | null>(null);
   const [history, setHistory] = useState<ScanEntry[]>([]);
   const [showManual, setShowManual] = useState(false);
   const busy = useRef(false);
-  // Continuous-scan mode: a successful admit clears itself after a beat
-  // so the line keeps moving. Same-QR repeats right after an admit are
-  // ignored (the code is still in the camera frame, already consumed).
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastBoarded = useRef<{ code: string; at: number } | null>(null);
 
   const role = user?.user_metadata?.role || 'student';
 
-  // Persisted scan log — survives app restarts, cleared never (staff aid).
   useEffect(() => {
     (async () => {
       try {
@@ -86,13 +59,8 @@ export default function ScanScreen() {
     });
   };
 
-  // Plain function (not useCallback): the compiler cannot preserve the
-  // manual memo, and every caller is an event handler that wants the
-  // latest closure anyway.
-  const verify = async (rawCode: string) => {
+  const verifyAndLog = async (rawCode: string) => {
     const code = parseTicketId(rawCode);
-    // Same QR still in frame right after its own admit — ignore repeats
-    // for a few seconds instead of flashing "already used".
     if (
       lastBoarded.current &&
       lastBoarded.current.code === code &&
@@ -116,174 +84,24 @@ export default function ScanScreen() {
     busy.current = true;
     setChecking(true);
     setReport(null);
-    const log = async (r: Report) => {
-      const final = await consume(r);
-      setReport(final);
-      pushHistory(code, final.status === 'used' || final.status === 'boarded' ? 'USED' : final.status === 'invalid' ? 'DENY' : 'ADMIT');
-      if (final.status === 'boarded') {
-        // Admit: buzz, remember the code, and clear the report on its
-        // own so the next rider can be scanned without tapping anything.
+
+    try {
+      const result = await verifyTicketCode(code);
+      setReport(result);
+      pushHistory(code, result.status === 'used' || result.status === 'boarded' ? 'USED' : result.status === 'invalid' ? 'DENY' : 'ADMIT');
+
+      if (result.status === 'boarded') {
         lastBoarded.current = { code, at: Date.now() };
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         flashTimer.current = setTimeout(() => {
           setReport((cur) => (cur && cur.status === 'boarded' ? null : cur));
         }, 1500);
-      } else if (final.status === 'invalid') {
-        // Deny: stays on screen until staff taps Scan Next.
+      } else if (result.status === 'invalid') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       }
-    };
-    try {
-      // Online-only verification — every scan hits the database.
-      // Requires section 9 of supabase-setup.sql (staff RLS) to be deployed.
-      let data: any = null;
-      let fetchError: any = null;
-      try {
-        const res = await supabase
-          .from('bookings')
-          .select('*, profiles(full_name, role, matric_number)')
-          .eq('ticket_id', code)
-          .maybeSingle();
-        data = res.data;
-        fetchError = res.error;
-      } catch (e) {
-        fetchError = e;
-      }
-
-      if (fetchError) {
-        // Network / RLS error — do NOT admit. Surface as error so staff retries with connection.
-        const msg = typeof fetchError.message === 'string' ? fetchError.message : '';
-        const isNetwork = /fetch|network|Failed to fetch|Load failed/i.test(msg);
-        await log({
-          status: 'invalid',
-          title: isNetwork ? 'No connection' : 'Scan failed',
-          message: isNetwork
-            ? 'Could not reach the server. Check your internet and try again. Do not allow boarding until the ticket is verified online.'
-            : 'Could not verify this ticket. Please try again.',
-        });
-        return;
-      }
-
-      if (data) {
-        await log(buildReport(data));
-        return;
-      }
-
-      // No row found — ticket does not exist.
-      await log({
-        status: 'invalid',
-        title: 'Ticket not recognised',
-        message: 'No booking matches this code in the database. Do not allow boarding.',
-      });
     } finally {
       setChecking(false);
       busy.current = false;
-    }
-  };
-
-  const buildReport = (b: any): Report => {
-    const prof = b.profiles || {};
-    const name = prof.full_name || 'Rider';
-    const matric = prof.matric_number ? ` • ${prof.matric_number}` : '';
-    const route = b.route || (b.route_direction === 'mini-to-main' ? 'Mini Campus → Main Campus' : 'Main Campus → Mini Campus');
-    const queue = b.queue_number ? `#${String(b.queue_number).padStart(2, '0')}` : '—';
-    const base = {
-      name: `${name}${matric}`,
-      route,
-      boarding: b.boarding_period ? formatPeriod12(b.boarding_period) : '—',
-      queue,
-      paid: b.total_amount > 0 ? formatPrice(b.total_amount) : undefined,
-      bookingId: b.id,
-      ticketId: b.ticket_id,
-    };
-    if (b.payment_status === 'cancelled' || b.ticket_status === 'cancelled') {
-      return { status: 'invalid', title: 'Ticket cancelled', message: 'This booking was cancelled. Do not allow boarding.', ...base };
-    }
-    if (b.payment_status !== 'paid') {
-      return { status: 'invalid', title: 'Not paid', message: 'Payment was never confirmed for this ticket. Do not allow boarding.', ...base };
-    }
-    if (b.ticket_status === 'used') {
-      return { status: 'used', title: 'Already used', message: 'This ticket was already scanned for boarding. Do not admit twice.', ...base };
-    }
-    // Every ticket lives 24 hours from purchase.
-    if (b.created_at && !isWithinTicketLife(b.created_at)) {
-      return { status: 'invalid', title: 'Ticket expired', message: 'This pass is older than 24 hours. Do not allow boarding.', ...base };
-    }
-    const day = (b.travel_date || '').slice(0, 10);
-    const today = todayStr();
-    if (day && day < today) {
-      return { status: 'invalid', title: 'Ticket expired', message: `This pass was for ${day}, not today. Do not allow boarding.`, ...base };
-    }
-    if (day && day > today) {
-      return { status: 'invalid', title: 'Not valid today', message: `This pass is for ${day}, not today. Do not allow boarding.`, ...base };
-    }
-    return {
-      status: 'valid',
-      title: 'Valid ticket — admit',
-      message: 'Payment confirmed. Allow this rider to board.',
-      meta: `${b.shuttle_type === 'private' ? 'Private' : 'Public'} shuttle`,
-      ...base,
-    };
-  };
-
-  /** Auto-consume: a valid scan marks the ticket used immediately (one-time use). */
-  const consume = async (r: Report): Promise<Report> => {
-    if (r.status !== 'valid') return r;
-    if (!r.ticketId) return r;
-    const failed = (title: string, message: string): Report => ({
-      status: 'invalid', title, message,
-      name: r.name, route: r.route, boarding: r.boarding, queue: r.queue,
-      paid: r.paid, bookingId: r.bookingId, retryCode: r.ticketId,
-    });
-    try {
-      // Server-side RPC flips unused->used and touches nothing else
-      // (staff JWTs hold no UPDATE grant since the least-privilege cutover).
-      const { data, error } = await supabase.rpc('mark_ticket_used', {
-        p_ticket_id: r.ticketId,
-      });
-
-      if (error) {
-        return failed(
-          'Could not mark ticket as used',
-          'The ticket is valid but the connection dropped before it was marked. Ask the rider to wait and tap Retry below.'
-        );
-      }
-      if (!data?.ok) {
-        if (data?.reason === 'not_staff') {
-          return failed(
-            'Not a staff account',
-            'This account is not registered as shuttle staff. Sign in with a staff account to scan.'
-          );
-        }
-        // Already flipped to used by another scan between our read and update.
-        return {
-          status: 'used',
-          title: 'Already used',
-          message: 'This ticket was just scanned for boarding by another device. Do not admit twice.',
-          name: r.name, route: r.route, boarding: r.boarding, queue: r.queue,
-          paid: r.paid, bookingId: r.bookingId,
-        };
-      }
-
-      // Cancel the 10-minute boarding reminder since ticket is now used
-      if (r.ticketId) {
-        cancelBoardingReminder(r.ticketId).catch(() => {});
-      }
-
-      return { ...r, status: 'boarded', title: 'Admitted — pass consumed', message: 'Ticket marked as used. This QR can no longer be used. Next rider please.' };
-    } catch {
-      return {
-        status: 'invalid',
-        title: 'Scan failed',
-        message: 'Could not complete the scan. Check your connection and tap Retry below.',
-        name: r.name,
-        route: r.route,
-        boarding: r.boarding,
-        queue: r.queue,
-        paid: r.paid,
-        bookingId: r.bookingId,
-        retryCode: r.ticketId,
-      };
     }
   };
 
@@ -296,9 +114,6 @@ export default function ScanScreen() {
     setManual('');
   };
 
-  // Manual code entry — a plain render helper (not a component) so the
-  // React compiler render-purity rule stays quiet. Shared by the main
-  // screen and the camera-denied screen so staff are never stuck.
   const renderManualEntry = () => (
     <>
       <Text style={styles.label}>Ticket code (manual)</Text>
@@ -319,7 +134,7 @@ export default function ScanScreen() {
         <TouchableOpacity
           style={[styles.verifyBtn, (!manual.trim() || checking) && { opacity: 0.45 }]}
           disabled={!manual.trim() || checking}
-          onPress={() => verify(manual)}
+          onPress={() => verifyAndLog(manual)}
           activeOpacity={0.85}
           accessibilityLabel="Verify ticket code"
           accessibilityRole="button"
@@ -422,7 +237,7 @@ export default function ScanScreen() {
             style={styles.camera}
             facing="back"
             barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={(e) => { if (!checking && (!report || report.status === 'boarded')) verify(e.data); }}
+            onBarcodeScanned={(e) => { if (!checking && (!report || report.status === 'boarded')) verifyAndLog(e.data); }}
           />
           <View style={styles.frame} pointerEvents="none">
             <View style={[styles.corner, { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4 }]} />
@@ -464,7 +279,7 @@ export default function ScanScreen() {
                 <AppleButton
                   title="Retry Scan"
                   icon="refresh"
-                  onPress={() => { const c = report.retryCode as string; setReport(null); verify(c); }}
+                  onPress={() => { const c = report.retryCode as string; setReport(null); verifyAndLog(c); }}
                 />
               </View>
             ) : null}

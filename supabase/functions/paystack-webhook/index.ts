@@ -5,7 +5,7 @@
  * before verify). Paystack retries events, so this handler is idempotent.
  *
  * TWO ACCOUNTS:
- *   - Transport fares (₦500 public-only) sign with PAYSTACK_SECRET_KEY.
+ *   - Transport fares (CNG Bus ₦500 / Petrol Bus ₦700) sign with PAYSTACK_SECRET_KEY.
  *   - Subscriptions (₦1,000) sign with PAYSTACK_SUB_SECRET_KEY.
  * Both Paystack dashboards point at this SAME URL. The signature is
  * accepted when it matches EITHER secret (signature IS the auth, no JWT).
