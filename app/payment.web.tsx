@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -56,6 +56,7 @@ export default function PaymentScreenWeb() {
 
   const [lastReference, setLastReference] = useState('');
   const handledRef = useRef<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
   const processingRef = useRef(false);
   const mountedRef = useRef(true);
 
@@ -168,26 +169,23 @@ export default function PaymentScreenWeb() {
     handleVerify(ref);
   }, [lastReference, paymentData, handleVerify]);
 
+  const startOver = useCallback(() => {
+    setStatus('idle');
+    setPaymentData(null);
+    setErrorMessage('');
+    setVerifyResult(null);
+    setLastReference('');
+    handledRef.current = null;
+    processingRef.current = false;
+  }, []);
+
   const retry = useCallback(() => {
-    const startOver = () => {
-      if (retryTimer.current) clearTimeout(retryTimer.current);
-      setStatus('idle'); setPaymentData(null); setErrorMessage('');
-      setVerifyResult(null); setLastReference('');
-      handledRef.current = null; processingRef.current = false;
-    };
     if (lastReference || paymentData?.reference) {
-      Alert.alert(
-        'Verify first?',
-        'If you already paid, verify that payment instead. Starting over may charge you twice.',
-        [
-          { text: 'Verify payment', onPress: () => retryVerify() },
-          { text: 'Start new payment', style: 'destructive', onPress: startOver },
-        ]
-      );
+      setShowConfirm(true);
       return;
     }
     startOver();
-  }, [lastReference, paymentData, retryVerify]);
+  }, [lastReference, paymentData, startOver]);
 
   const viewTicket = useCallback(async () => {
     if (paymentData?.bookingId && verifyResult?.ticketId && user?.id) {
@@ -369,6 +367,33 @@ export default function PaymentScreenWeb() {
           </View>
         )}
       </ScrollView>
+
+      {showConfirm && (
+        <TouchableOpacity style={styles.modalBackdrop} onPress={() => setShowConfirm(false)} activeOpacity={1}>
+          <TouchableOpacity onPress={() => {}} activeOpacity={1}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Verify first?</Text>
+              <Text style={styles.modalMessage}>
+                If you already paid, verify that payment instead. Starting over may charge you twice.
+              </Text>
+              <View style={styles.modalButtons}>
+                <AppleButton
+                  title="Verify payment"
+                  onPress={() => { setShowConfirm(false); retryVerify(); }}
+                  variant="plain"
+                />
+                <AppleButton
+                  title="Start new payment"
+                  onPress={() => { setShowConfirm(false); startOver(); }}
+                  variant="plain"
+                  style={{ marginTop: 10 }}
+                />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      )}
+
     </View>
   );
 }
@@ -410,4 +435,38 @@ const styles = StyleSheet.create({
   webTitle: { fontSize: 17, fontWeight: '700', color: '#1C1C1E' },
   webSub: { fontSize: 13, color: '#6B7280', marginTop: 2 },
   webLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 22,
+    width: '88%',
+    maxWidth: 320,
+    borderWidth: 1,
+    borderColor: '#E9E9EE',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1C1C1E',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: 14.5,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  modalButtons: {
+    width: '100%',
+    gap: 10,
+  },
 });
