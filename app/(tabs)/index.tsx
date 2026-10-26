@@ -20,7 +20,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { activeBookings, loading, refreshing, refresh } = useBookings();
-  const { active: subActive } = useSubscription();
+  const { active: subActive, loading: subLoading } = useSubscription();
   const isStaff = (user as any)?.user_metadata?.role === 'staff';
   const [unread, setUnread] = useState(0);
 
@@ -166,7 +166,7 @@ export default function HomeScreen() {
           <Image source={require('@/assets/images/icon.png')} style={styles.heroWater} resizeMode="contain" />
         </View>
 
-        {!subActive && !isStaff ? (
+        {!subLoading && !subActive && !isStaff ? (
           <TouchableOpacity style={styles.subBanner} activeOpacity={0.88} onPress={() => router.push('/subscription' as any)}>
             <View style={styles.subBannerIcon}>
               <MaterialIcons name="card-membership" size={22} color="#FFFFFF" />

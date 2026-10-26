@@ -206,6 +206,11 @@ export default function SubscriptionScreen() {
               <AppleButton title="Book a shuttle" icon="directions-bus" onPress={() => router.replace('/booking')} />
             </View>
           </View>
+        ) : subLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={GREEN} />
+            <Text style={styles.cTitle}>Checking subscription…</Text>
+          </View>
         ) : (
           <>
             {status === 'error' ? <Text style={styles.err}>{errorMessage}</Text> : null}
