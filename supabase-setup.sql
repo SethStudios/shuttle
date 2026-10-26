@@ -677,7 +677,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
 CREATE TABLE IF NOT EXISTS public.subscriptions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
-  amount NUMERIC(10, 2) NOT NULL DEFAULT 1000 CHECK (amount = 1000),
+  amount NUMERIC(10, 2) NOT NULL DEFAULT 500 CHECK (amount = 500),
   currency TEXT NOT NULL DEFAULT 'NGN' CHECK (currency = 'NGN'),
   status TEXT NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'active', 'expired', 'failed')),

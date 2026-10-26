@@ -90,7 +90,7 @@ serve(async (req: Request) => {
       .eq('paystack_reference', reference)
       .maybeSingle();
     if (sub) {
-      if (Number(data.amount) !== 700 * 100) {
+      if (Number(data.amount) !== 500 * 100) {
         console.error('Webhook subscription amount mismatch for', reference);
         return new Response('ok');
       }
