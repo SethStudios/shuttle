@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -22,6 +22,7 @@ export default function WalletScreen() {
 
         {/* ATM-style bank card */}
         <View style={styles.atmCard}>
+          <Image source={require('@/assets/images/icon.png')} style={styles.cardImage} />
           <MaterialIcons name="account-balance-wallet" size={24} color="rgba(255,255,255,0.9)" />
           <Text style={styles.cardLabel}>Wallet Balance</Text>
           <Text style={styles.cardAmount}>₦0.00</Text>
@@ -41,12 +42,10 @@ export default function WalletScreen() {
         </View>
 
         {/* Recent Transactions */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          <View style={styles.emptyList}>
-            <MaterialIcons name="receipt" size={32} color="#8E8E93" />
-            <Text style={styles.emptyText}>No transactions yet</Text>
-          </View>
+        <Text style={styles.sectionTitle}>Recent Transactions</Text>
+        <View style={styles.emptyList}>
+          <MaterialIcons name="receipt" size={32} color="#8E8E93" />
+          <Text style={styles.emptyText}>No transactions yet</Text>
         </View>
       </ScrollView>
     </View>
@@ -64,6 +63,16 @@ const styles = StyleSheet.create({
     padding: 24,
     marginBottom: 20,
     width: '100%',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  cardImage: {
+    position: 'absolute',
+    right: -30,
+    bottom: -30,
+    width: 120,
+    height: 120,
+    opacity: 0.15,
   },
   cardIcon: {
     color: 'rgba(255,255,255,0.9)',
@@ -97,7 +106,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     flex: 1,
-    marginRight: 8,
+    marginRight: 4,
   },
   transferBtn: {
     backgroundColor: GREEN,
@@ -109,7 +118,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     flex: 1,
-    marginLeft: 8,
+    marginLeft: 4,
   },
   topUpText: {
     fontSize: 14,
