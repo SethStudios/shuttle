@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@/contexts/AuthContext';
 import { UniAbujaGreen } from '@/constants/theme';
+import { SUBSCRIPTION, formatSubscriptionPrice } from '@/constants/subscription';
 import Constants from 'expo-constants';
 
 const GREEN = UniAbujaGreen[700];
@@ -136,7 +137,7 @@ export default function ProfileScreen() {
 
         <Text style={styles.sec}>Account</Text>
         <View style={styles.group}>
-          <Item icon="card-membership" label="Subscription" sub="₦1,000 monthly pass required to book" go={() => router.push('/subscription' as any)} />
+          <Item icon="card-membership" label="Subscription" sub={`${formatSubscriptionPrice(SUBSCRIPTION.price)} monthly pass required to book`} go={() => router.push('/subscription' as any)} />
           <View style={styles.sep} />
           <Item icon="person-outline" label="Edit profile" sub="Update your name and phone number" go={() => router.push('/edit-profile')} />
           <View style={styles.sep} />

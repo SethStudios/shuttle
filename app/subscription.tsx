@@ -156,7 +156,7 @@ export default function SubscriptionScreen() {
           </View>
         </View>
         <Text style={styles.title}>Monthly subscription</Text>
-        <Text style={styles.sub}>₦1,000 for 30 days. Required to book any shuttle.</Text>
+        <Text style={styles.sub}>{formatSubscriptionPrice(SUBSCRIPTION.price)} for 30 days. Required to book any shuttle.</Text>
 
         <View style={styles.card}>
           <View style={styles.merchant}>
