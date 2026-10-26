@@ -57,6 +57,9 @@ export default function TicketsScreen() {
     if (b.ticket_status === 'cancelled' || b.payment_status === 'cancelled') return { l: 'Cancelled', c: '#FF3B30', bg: '#FFE9E8' };
     if (b.payment_status === 'failed') return { l: 'Failed', c: '#FF3B30', bg: '#FFE9E8' };
     if (b.ticket_status === 'used') return { l: 'Used', c: '#6B7280', bg: '#EDEDED' };
+    // A booking is only "Active" if payment is confirmed. Pending/unpaid
+    // bookings must never show as Active — they have no valid ticket.
+    if (b.payment_status !== 'paid') return { l: 'Pending', c: '#B45309', bg: '#FEF3C7' };
     if (!isWithinTicketLife(b.created_at)) return { l: 'Expired', c: '#B45309', bg: '#FEF3C7' };
     const today = new Date().toISOString().slice(0, 10);
     if (b.travel_date < today) return { l: 'Expired', c: '#B45309', bg: '#FEF3C7' };
