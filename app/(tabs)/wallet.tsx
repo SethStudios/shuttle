@@ -1,6 +1,5 @@
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { UniAbujaGreen } from '@/constants/theme';
@@ -9,7 +8,6 @@ const GREEN = UniAbujaGreen[700];
 
 export default function WalletScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
 
   return (
     <View style={styles.root}>
@@ -19,11 +17,7 @@ export default function WalletScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.nav}>
-          <TouchableOpacity style={styles.back} onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back" size={24} color="#1C1C1E" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Wallet</Text>
-          <View style={{ width: 40 }} />
+          <Text style={[styles.title, { textAlign: 'center' }]}>Wallet</Text>
         </View>
 
         <View style={styles.card}>

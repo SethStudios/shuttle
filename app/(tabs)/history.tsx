@@ -110,7 +110,9 @@ export default function TicketsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isStaff ? scansRefreshing : refreshing} onRefresh={isStaff ? refreshScans : refresh} tintColor={GREEN} />}
       >
-        <Text style={styles.title}>{isStaff ? 'Scanned' : 'History'}</Text>
+        <View style={styles.titleWrap}>
+          <Text style={styles.title}>{isStaff ? 'Scanned' : 'History'}</Text>
+        </View>
         <Text style={styles.sub}>
           {isStaff ? 'Tickets you have scanned at boarding.' : 'Your past and completed trips. Active passes live on Home.'}
         </Text>
@@ -207,7 +209,8 @@ export default function TicketsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F2F2F7' },
   body: { paddingHorizontal: 18 },
-  title: { fontSize: 32, fontWeight: '800', color: '#1C1C1E', letterSpacing: -0.8 },
+  titleWrap: { textAlign: 'center', marginBottom: 4 },
+  title: { fontSize: 32, fontWeight: '800', color: '#1C1C1E', letterSpacing: -0.8, textAlign: 'center' },
   sub: { fontSize: 15, color: '#6B7280', marginTop: 4, marginBottom: 16 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 15, borderWidth: 1, borderColor: '#E9E9EE' },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },

@@ -175,7 +175,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F2F2F7' },
   body: { paddingHorizontal: 18 },
-  title: { fontSize: 32, fontWeight: '800', color: '#1C1C1E', letterSpacing: -0.8, marginBottom: 16 },
+  title: { fontSize: 32, fontWeight: '800', color: '#1C1C1E', letterSpacing: -0.8, marginBottom: 16, textAlign: 'center' },
   card: { backgroundColor: '#FFFFFF', borderRadius: 22, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#E9E9EE', marginBottom: 6 },
   avatar: { width: 76, height: 76, borderRadius: 38, backgroundColor: GREEN, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   avatarT: { fontSize: 27, fontWeight: '800', color: '#FFFFFF' },
