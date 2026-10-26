@@ -19,6 +19,7 @@
 import { isRunningInExpoGo } from 'expo';
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { ShuttleType } from '@/constants/pricing';
 
 // ── Constants ────────────────────────────────────────────────────
 
@@ -207,7 +208,7 @@ export async function scheduleBoardingReminder(params: {
   boardingPeriod: string; // e.g. "15:00-16:00"
   travelDate: string;     // YYYY-MM-DD
   routeLabel: string;
-  shuttleType: 'public' | 'private';
+  shuttleType: ShuttleType;
 }): Promise<void> {
   // Strict 24h "HH:MM-HH:MM" only — 12h display strings ("6:00 – 7:00 AM")
   // would mis-schedule PM reminders 12h early.
@@ -258,7 +259,7 @@ export async function scheduleBoardingReminder(params: {
   await Notifications.scheduleNotificationAsync({
     content: {
       title: '⏰ Boarding Soon',
-      body: `Your ${params.shuttleType === 'private' ? 'Private' : 'Public'} shuttle (${params.routeLabel}) departs in 10 minutes. Head to the terminal now!`,
+      body: `Your ${params.shuttleType === 'private' ? 'Private' : params.shuttleType === 'petrol' ? 'Petrol' : 'CNG'} shuttle (${params.routeLabel}) departs in 10 minutes. Head to the terminal now!`,
       sound: 'default',
       priority: Notifications.AndroidNotificationPriority.HIGH,
       data: { type: 'boarding-reminder', ticketId: params.ticketId, dateStr: params.travelDate, hour: startHour },
@@ -333,7 +334,7 @@ async function maybeCheckBoardingReminders(): Promise<void> {
         await storeNotification({
           id: `reminder-${r.ticketId}`,
           title: '⏰ Boarding Soon',
-          body: `Your ${r.shuttleType === 'private' ? 'Private' : 'Public'} shuttle (${r.routeLabel}) departs in 10 minutes. Head to the terminal now!`,
+          body: `Your ${r.shuttleType === 'private' ? 'Private' : r.shuttleType === 'petrol' ? 'Petrol' : 'CNG'} shuttle (${r.routeLabel}) departs in 10 minutes. Head to the terminal now!`,
           timestamp: Date.now(),
           read: false,
         });

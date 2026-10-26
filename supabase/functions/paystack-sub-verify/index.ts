@@ -4,7 +4,7 @@
  * The ONLY authority for activating a subscription. Flow:
  *   1. Auth caller (JWT) -> user_id.
  *   2. Ask Paystack for transaction truth.
- *   3. Recompute expected amount server-side (₦1,000, never client).
+ *   3. Recompute expected amount server-side (₦700, never client).
  *   4. Activate via atomic RPC confirm_subscription_payment.
  *
  * ENV: PAYSTACK_SUB_SECRET_KEY (subscription account)
@@ -14,7 +14,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const SUBSCRIPTION_PRICE = 1000;
+const SUBSCRIPTION_PRICE = 700;
 const EXPECTED_KOBO = SUBSCRIPTION_PRICE * 100;
 const CURRENCY = 'NGN';
 

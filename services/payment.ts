@@ -92,7 +92,7 @@ export async function initializePayment(params: {
   if (!email || !email.trim()) {
     throw new PaymentError('Email is required to process payment.');
   }
-  if (shuttleType !== 'public' && shuttleType !== 'private') {
+  if (shuttleType !== 'public' && shuttleType !== 'petrol' && shuttleType !== 'private') {
     throw new PaymentError('Unknown shuttle type. Please go back and choose your trip again.');
   }
 

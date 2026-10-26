@@ -1,9 +1,9 @@
 /**
  * Monthly subscription configuration — single source of truth.
- * ₦1,000 for 30 days. Required to book (hard gate).
+ * ₦700 for 30 days. Required to book (hard gate).
  */
 export const SUBSCRIPTION = {
-  price: 1000,
+  price: 700,
   currency: 'NGN',
   durationDays: 30,
 } as const;

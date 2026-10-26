@@ -14,7 +14,7 @@ let bookingsRows = [];
 
 const todayStr = (d = new Date()) => d.toISOString().slice(0, 10);
 const naira = (n) => '₦' + Number(n || 0).toLocaleString('en-NG');
-const busLabel = (t) => (t === 'private' ? 'Petrol Bus' : 'CNG Bus');
+const busLabel = (t) => (t === 'petrol' ? 'Petrol Bus' : t === 'private' ? 'Private Shuttle' : 'CNG Bus');
 const pill = (t) => `<span class="pill ${t}">${t}</span>`;
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -161,14 +161,16 @@ async function loadOverview() {
   if (error) { $('kpis').innerHTML = `<p class="error">Bookings read failed: ${esc(error.message)}</p>`; return; }
   const paid = data.filter((b) => b.payment_status === 'paid');
   const rev = paid.reduce((s, b) => s + Number(b.total_amount || 0), 0);
-  const cng = paid.filter((b) => b.shuttle_type !== 'private');
-  const pet = paid.filter((b) => b.shuttle_type === 'private');
+  const cng = paid.filter((b) => b.shuttle_type === 'public');
+  const pet = paid.filter((b) => b.shuttle_type === 'petrol');
+  const prv = paid.filter((b) => b.shuttle_type === 'private');
   const unused = paid.filter((b) => b.ticket_status === 'unused').length;
   const used = paid.filter((b) => b.ticket_status === 'used').length;
   const pending = data.filter((b) => b.payment_status === 'pending');
   const failed = data.filter((b) => b.payment_status === 'failed');
   const cngRev = cng.reduce((s, b) => s + Number(b.total_amount || 0), 0);
   const petRev = pet.reduce((s, b) => s + Number(b.total_amount || 0), 0);
+  const prvRev = prv.reduce((s, b) => s + Number(b.total_amount || 0), 0);
   const boardPct = paid.length ? Math.round((used / paid.length) * 100) : 0;
 
   $('day-summary').innerHTML = `<strong>${esc(date)}</strong> — <strong>${paid.length}</strong> paid passes (<strong>${naira(rev)}</strong>) · ` +
@@ -177,8 +179,8 @@ async function loadOverview() {
 
   const kpi = (k, v, s, cls) => `<div class="kpi${cls ? ' ' + cls : ''}"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
   $('kpis').innerHTML =
-    kpi('Revenue', naira(rev), `${naira(cngRev)} CNG · ${naira(petRev)} Petrol`) +
-    kpi('Paid passes', paid.length, `${cng.length} CNG · ${pet.length} Petrol`) +
+    kpi('Revenue', naira(rev), `${naira(cngRev)} CNG · ${naira(petRev)} Petrol · ${naira(prvRev)} Private`) +
+    kpi('Paid passes', paid.length, `${cng.length} CNG · ${pet.length} Petrol · ${prv.length} Private`) +
     kpi('Waiting to board', unused, 'paid + unused', unused > 0 ? '' : '') +
     kpi('Boarded', used, boardPct + '% of sold') +
     kpi('Unpaid', pending.length, 'pending checkout', pending.length ? 'alert' : '') +
@@ -187,17 +189,21 @@ async function loadOverview() {
   $('rev-split').innerHTML =
     barRow('CNG Bus · ₦500', cng.length, Math.max(1, paid.length), '') +
     `<div class="muted small" style="margin:-2px 0 8px 139px">${naira(cngRev)} collected</div>` +
-    barRow('Petrol Bus · ₦700', pet.length, Math.max(1, paid.length), 'petrol') +
-    `<div class="muted small" style="margin:-2px 0 0 139px">${naira(petRev)} collected</div>`;
+    barRow('Petrol Bus · ₦600', pet.length, Math.max(1, paid.length), 'petrol') +
+    `<div class="muted small" style="margin:-2px 0 8px 139px">${naira(petRev)} collected</div>` +
+    barRow('Private Shuttle · ₦700', prv.length, Math.max(1, paid.length), 'private') +
+    `<div class="muted small" style="margin:-2px 0 0 139px">${naira(prvRev)} collected</div>`;
 
   // Per-window boarding progress
   const wins = {};
   paid.forEach((b) => {
     const p = b.boarding_period || '—';
-    wins[p] = wins[p] || { total: 0, used: 0, cng: 0, pet: 0 };
+    wins[p] = wins[p] || { total: 0, used: 0, cng: 0, pet: 0, prv: 0 };
     wins[p].total++;
     if (b.ticket_status === 'used') wins[p].used++;
-    if (b.shuttle_type === 'private') wins[p].pet++; else wins[p].cng++;
+    if (b.shuttle_type === 'public') wins[p].cng++;
+    else if (b.shuttle_type === 'petrol') wins[p].pet++;
+    else wins[p].prv++;
   });
   $('period-bars').innerHTML = Object.keys(wins).sort().map((p) => {
     const w = wins[p];
@@ -358,7 +364,7 @@ async function loadSubs() {
 $('f-sub').onchange = loadSubs;
 
 async function loadRoutes() {
-  $('fare-cards').innerHTML = [['CNG Bus', 500, 'public · Main ⇄ Mini'], ['Petrol Bus', 700, 'private · Main ⇄ Mini'], ['Monthly pass', 1000, '30 days · students only']].map(([n, p, d]) => `<div class="fare"><div><strong>${n}</strong></div><div class="p">${naira(p)}</div><div class="muted small">${d}</div></div>`).join('');
+  $('fare-cards').innerHTML = [['CNG Bus', 500, 'public · Main ⇄ Mini'], ['Petrol Bus', 600, 'petrol · Main ⇄ Mini'], ['Private Shuttle', 700, 'private · Main ⇄ Mini'], ['Monthly pass', 700, '30 days · students only']].map(([n, p, d]) => `<div class="fare"><div><strong>${n}</strong></div><div class="p">${naira(p)}</div><div class="muted small">${d}</div></div>`).join('');
   const { data, error } = await sb.from('shuttle_routes').select('*').eq('is_active', true).order('departure_time').limit(100);
   $('routes-list').innerHTML = error ? `<p class="error">${esc(error.message)}</p>`
     : (data || []).map((r) => `<div class="bar"><span><strong>${esc(r.route_name)}</strong> ${esc(r.origin)} → ${esc(r.destination)} · ${esc(String(r.departure_time).slice(0, 5))}–${esc(String(r.arrival_time).slice(0, 5))} · cap ${r.capacity}</span></div>`).join('') || '<p class="muted">No active rows in shuttle_routes — booking runs on the two fixed campus directions (Main ⇄ Mini, 12 hourly windows 06:00–18:00).</p>';

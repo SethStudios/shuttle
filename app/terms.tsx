@@ -17,7 +17,7 @@ const SECTIONS: { h: string; b: string }[] = [
   },
   {
     h: '3. Fares and fees',
-    b: 'The fare shown before checkout is the full price you pay — no service fee or hidden charges in the app. A ₦1,000 monthly subscription is required to book; trip fares are charged per ride on top. Fares and subscription price may change; the price at the moment you pay applies. All amounts are in Nigerian Naira (₦).',
+    b: 'The fare shown before checkout is the full price you pay — no service fee or hidden charges in the app. A ₦700 monthly subscription is required to book; trip fares are charged per ride on top. Fares and subscription price may change; the price at the moment you pay applies. All amounts are in Nigerian Naira (₦).',
   },
   {
     h: '4. Payment',

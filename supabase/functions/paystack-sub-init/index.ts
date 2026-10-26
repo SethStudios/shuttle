@@ -1,7 +1,7 @@
 /**
  * Paystack Subscription Initialize — Supabase Edge Function
  *
- * Starts a ₦1,000 / 30-day subscription payment. Creates a pending
+ * Starts a ₦700 / 30-day subscription payment. Creates a pending
  * row in public.subscriptions and returns the Paystack checkout URL.
  *
  * SECURITY MODEL mirrors paystack-init:
@@ -16,7 +16,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const SUBSCRIPTION_PRICE = 1000;
+const SUBSCRIPTION_PRICE = 700;
 const SUBSCRIPTION_KOBO = SUBSCRIPTION_PRICE * 100;
 const CURRENCY = 'NGN';
 

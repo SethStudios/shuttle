@@ -4,30 +4,33 @@
  * Update these values to change pricing across the app
  */
 export const PRICING = {
-  publicShuttle: 500,
-  privateShuttle: 700,
+  public: 500,
+  petrol: 600,
+  private: 700,
   serviceFee: 0,
 } as const;
 
-export type ShuttleType = 'public' | 'private';
+export type ShuttleType = 'public' | 'petrol' | 'private';
 
-// User-facing names: DB keeps 'public' | 'private' (no migration),
-// but students see CNG Bus (₦500) and Petrol Bus (₦700).
+// User-facing names: DB keeps 'public' | 'petrol' | 'private' (no migration),
+// but students see CNG Bus (₦500), Petrol Bus (₦600) and Private Shuttle (₦700).
 export const SHUTTLE_LABELS: Record<ShuttleType, string> = {
   public: 'CNG Bus',
-  private: 'Petrol Bus',
+  petrol: 'Petrol Bus',
+  private: 'Private Shuttle',
 };
 
 export const SHUTTLE_DESCRIPTIONS: Record<ShuttleType, string> = {
   public: 'CNG-powered • Main ⇄ Mini',
-  private: 'Petrol-powered • Main ⇄ Mini',
+  petrol: 'Petrol-powered • Main ⇄ Mini',
+  private: 'Private shuttle • Main ⇄ Mini',
 };
 
 export const getShuttleLabel = (type: ShuttleType): string =>
   SHUTTLE_LABELS[type] ?? type;
 
 export const getShuttleShortLabel = (type: string | null | undefined): string =>
-  type === 'private' ? SHUTTLE_LABELS.private : SHUTTLE_LABELS.public;
+  type === 'private' ? SHUTTLE_LABELS.private : type === 'petrol' ? SHUTTLE_LABELS.petrol : SHUTTLE_LABELS.public;
 
 export type RouteDirection = 'main-to-mini' | 'mini-to-main';
 
@@ -40,7 +43,7 @@ export const getRouteLabel = (direction: RouteDirection): string =>
   ROUTE_LABELS[direction];
 
 export const getShuttlePrice = (type: ShuttleType): number => {
-  return type === 'public' ? PRICING.publicShuttle : PRICING.privateShuttle;
+  return PRICING[type];
 };
 
 export const formatPrice = (amount: number): string => {

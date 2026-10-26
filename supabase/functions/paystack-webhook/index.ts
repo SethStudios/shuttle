@@ -23,6 +23,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const FARES = {
   public: { fare: 500, serviceFee: 0 },
+  petrol: { fare: 600, serviceFee: 0 },
   private: { fare: 700, serviceFee: 0 },
 } as const;
 
@@ -89,7 +90,7 @@ serve(async (req: Request) => {
       .eq('paystack_reference', reference)
       .maybeSingle();
     if (sub) {
-      if (Number(data.amount) !== 1000 * 100) {
+      if (Number(data.amount) !== 700 * 100) {
         console.error('Webhook subscription amount mismatch for', reference);
         return new Response('ok');
       }

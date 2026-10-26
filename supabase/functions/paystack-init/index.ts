@@ -27,12 +27,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // ── Pricing (inlined — self-contained) ──────────────────────────
 // Deploys as-is from the Dashboard editor (single file only).
 // Keep in sync with _shared/pricing.ts and constants/pricing.ts:
-//   public = CNG Bus ₦500 fare. private = Petrol Bus ₦700 fare. No service fee.
+//   public = CNG Bus ₦500 fare. petrol = Petrol Bus ₦600 fare. private = Private Shuttle ₦700 fare. No service fee.
 const FARES = {
   public: { fare: 500, serviceFee: 0 },
+  petrol: { fare: 600, serviceFee: 0 },
   private: { fare: 700, serviceFee: 0 },
 } as const;
-// Both directions are valid — frontend sends the label, we whitelist it.
+// All directions are valid — frontend sends the label, we whitelist it.
 const ROUTES = ['Main Campus → Mini Campus', 'Mini Campus → Main Campus'] as const;
 const DEFAULT_ROUTE = ROUTES[0];
 const CURRENCY = 'NGN';
@@ -96,7 +97,7 @@ serve(async (req: Request) => {
     }
     const { shuttle_type, email, boarding_period, route } = body as Record<string, string>;
 
-    if (shuttle_type !== 'public' && shuttle_type !== 'private') {
+    if (shuttle_type !== 'public' && shuttle_type !== 'petrol' && shuttle_type !== 'private') {
       return json({ error: 'Unknown shuttle type. Please choose your trip again.' }, 400);
     }
 

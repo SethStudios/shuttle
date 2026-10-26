@@ -13,7 +13,7 @@ const DEV_BOOKINGS_KEY = '@dev_bookings';
 export interface Booking {
   id: string;
   user_id: string;
-  shuttle_type: 'public' | 'private';
+  shuttle_type: ShuttleType;
   route: string;
   fare: number;
   service_fee: number;
@@ -88,7 +88,7 @@ export async function markDevBookingUsed(bookingId: string): Promise<void> {
 }
 
 export async function saveDevBooking(params: {
-  shuttleType: 'public' | 'private';
+  shuttleType: ShuttleType;
   bookingId: string;
   reference: string;
   ticketId: string;

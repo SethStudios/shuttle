@@ -21,6 +21,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // Keep in sync with paystack-init and constants/pricing.ts.
 const FARES = {
   public: { fare: 500, serviceFee: 0 },
+  petrol: { fare: 600, serviceFee: 0 },
   private: { fare: 700, serviceFee: 0 },
 } as const;
 const CURRENCY = 'NGN';

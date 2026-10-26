@@ -226,7 +226,7 @@ export default function BookingScreen() {
         )}
 
         <Text style={styles.sec}>3 • Shuttle</Text>
-        {(['public', 'private'] as ShuttleType[]).map((t) => {
+        {(['public', 'petrol', 'private'] as ShuttleType[]).map((t) => {
           const on = type === t;
           return (
             <TouchableOpacity key={t} style={[styles.opt, on && styles.optOn]} onPress={() => pick(() => setType(t))} activeOpacity={0.85}>
@@ -257,7 +257,7 @@ export default function BookingScreen() {
             <MaterialIcons name="arrow-forward" size={19} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
-        <Text style={styles.fee}>No service fee • Paystack secure checkout • ₦1,000 monthly subscription required</Text>
+        <Text style={styles.fee}>No service fee • Paystack secure checkout • ₦700 monthly subscription required</Text>
       </View>
     </View>
   );
