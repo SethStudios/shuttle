@@ -23,15 +23,16 @@ function AppleTabBar({ state, navigation }: any) {
     <View
       style={{
         position: 'absolute',
-        left: 16,
-        right: 16,
+        left: '50%',
         bottom: bottomPad,
+        width: 260,
+        transform: [{ translateX: -130 }],
         backgroundColor: '#FFFFFF',
-        borderRadius: 28,
+        borderRadius: 26,
         paddingVertical: 8,
-        paddingHorizontal: 10,
+        paddingHorizontal: 6,
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'space-evenly',
         alignItems: 'center',
         ...(Platform.OS === 'android'
           ? { elevation: 16 }
