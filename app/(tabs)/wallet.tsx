@@ -28,11 +28,17 @@ export default function WalletScreen() {
           <Text style={styles.cardSubtitle}>Available Balance</Text>
         </View>
 
-        {/* Top up button */}
-        <TouchableOpacity style={styles.topUpBtn} onPress={() => {}}>
-          <MaterialIcons name="add" size={20} color="#FFFFFF" />
-          <Text style={styles.topUpText}>Top up your wallet</Text>
-        </TouchableOpacity>
+        {/* Top up and Transfer buttons */}
+        <View style={styles.actionsRow}>
+          <TouchableOpacity style={styles.topUpBtn} onPress={() => {}}>
+            <MaterialIcons name="add" size={20} color="#FFFFFF" />
+            <Text style={styles.topUpText}>Top up</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.transferBtn} onPress={() => {}}>
+            <MaterialIcons name="send" size={20} color="#FFFFFF" />
+            <Text style={styles.topUpText}>Transfer</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Recent Transactions */}
         <View style={styles.card}>
@@ -87,17 +93,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    alignSelf: 'center',
-    width: '65%',
-    marginBottom: 24,
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flex: 1,
+    marginRight: 8,
+  },
+  transferBtn: {
+    backgroundColor: GREEN,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flex: 1,
+    marginLeft: 8,
   },
   topUpText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    marginBottom: 24,
   },
   card: { backgroundColor: '#FFFFFF', borderRadius: 22, padding: 18, borderWidth: 1, borderColor: '#E9E9EE', marginBottom: 16 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: '#6B7280', marginBottom: 12 },
