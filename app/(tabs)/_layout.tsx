@@ -11,7 +11,7 @@ const GREEN = UniAbujaGreen[700];
 const TABS: { name: string; icon: React.ComponentProps<typeof MaterialIcons>['name'] }[] = [
   { name: 'index', icon: 'home' },
   { name: 'history', icon: 'confirmation-num' },
-  { name: 'notifications', icon: 'notifications-none' },
+  { name: 'wallet', icon: 'account-balance-wallet' },
   { name: 'profile', icon: 'person-outline' },
 ];
 
@@ -28,10 +28,10 @@ function AppleTabBar({ state, navigation }: any) {
         bottom: bottomPad,
         backgroundColor: '#FFFFFF',
         borderRadius: 28,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
         flexDirection: 'row',
-        justifyContent: 'space-around',
+        justifyContent: 'space-between',
         alignItems: 'center',
         ...(Platform.OS === 'android'
           ? { elevation: 16 }
@@ -57,14 +57,14 @@ function AppleTabBar({ state, navigation }: any) {
             <Pressable
               key={route.key}
               onPress={onPress}
-              style={{ padding: 10, borderRadius: 20 }}
+              style={{ padding: 8, borderRadius: 20 }}
               accessibilityRole="tab"
               accessibilityState={{ selected: focused }}
               accessibilityLabel={meta.name}
             >
               <MaterialIcons
                 name={meta.icon}
-                size={26}
+                size={32}
                 color={focused ? GREEN : '#8E8E93'}
               />
             </Pressable>
@@ -82,7 +82,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
       <Tabs.Screen name="history" options={{ title: 'Tickets' }} />
-      <Tabs.Screen name="notifications" options={{ title: 'Alerts', href: null }} />
+      <Tabs.Screen name="wallet" options={{ title: 'Wallet', href: null }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
     </Tabs>
   );
