@@ -15,6 +15,7 @@ import {
 } from '@/constants/pricing';
 import { TAP_DEBOUNCE_MS } from '@/constants/app';
 import { isBookingOpen } from '@/utils/tickets';
+import { supabase } from '@/utils/supabase';
 import { UniAbujaGreen } from '@/constants/theme';
 
 const GREEN = UniAbujaGreen[700];
@@ -34,6 +35,32 @@ export default function BookingScreen() {
   const going = useRef(false);
   const goingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const subscriptionBlocked = !isStaff && !subLoading && !subActive;
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletLoading, setWalletLoading] = useState(true);
+
+  // Fetch wallet balance
+  const fetchWalletBalance = useCallback(async () => {
+    if (!user) { setWalletLoading(false); return; }
+    try {
+      const { data, error } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (error) throw error;
+      setWalletBalance((data as any)?.balance || 0);
+    } catch {
+      setWalletBalance(0);
+    } finally {
+      setWalletLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchWalletBalance();
+  }, [fetchWalletBalance]);
+
+  const canPayWithWallet = !walletLoading && walletBalance >= total && total > 0;
 
   // One active pass per route + shuttle: a second pass for the same
   // direction AND bus type is blocked until the current one is used or expires.
@@ -77,7 +104,7 @@ export default function BookingScreen() {
     router.push(`/ticket?bookingId=${encodeURIComponent(routeActive.id)}&route=${encodeURIComponent(routeActive.route_direction || route)}` as any);
   };
 
-  const go = () => {
+  const go = async () => {
     if (!type || going.current || loading || soldOut || subLoading) return;
     if (subscriptionBlocked) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
@@ -94,6 +121,49 @@ export default function BookingScreen() {
     going.current = true;
     if (goingTimer.current) clearTimeout(goingTimer.current);
     goingTimer.current = setTimeout(() => { going.current = false; }, TAP_DEBOUNCE_MS);
+
+    // ── Wallet payment ──
+    if (canPayWithWallet && !routeActive) {
+      Alert.alert(
+        'Pay with Wallet?',
+        `Deduct ₦${total.toLocaleString()} from your wallet?\nBalance: ₦${walletBalance.toLocaleString()}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Pay with Wallet',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const { data, error } = await supabase.functions.invoke('wallet-pay', {
+                  body: {
+                    shuttle_type: type,
+                    route: route === 'main-to-mini' ? 'Main Campus → Mini Campus' : 'Mini Campus → Main Campus',
+                    boarding_period: period.label,
+                    travel_date: new Date().toISOString().slice(0, 10),
+                    amount: total,
+                  },
+                });
+                if (error) throw new Error(error.message || 'Wallet payment failed');
+                if (!data?.ok) {
+                  Alert.alert('Payment failed', (data as any)?.reason || 'Insufficient wallet balance.');
+                  going.current = false;
+                  return;
+                }
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+                setWalletBalance((data as any).balance);
+                router.replace(`/ticket?bookingId=${encodeURIComponent(data.booking_id)}&route=${encodeURIComponent(route)}` as any);
+              } catch (err: any) {
+                Alert.alert('Payment failed', err?.message || 'Wallet payment could not be completed.');
+                going.current = false;
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    // ── Paystack payment ──
     if (routeActive) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
       Alert.alert(
@@ -104,6 +174,7 @@ export default function BookingScreen() {
           { text: 'OK', style: 'cancel' },
         ]
       );
+      going.current = false;
       return;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -251,13 +322,16 @@ export default function BookingScreen() {
           <View>
             <Text style={styles.barLab}>{getShuttleLabel(type)} • {formatPeriod12(period.label)}</Text>
             <Text style={styles.barTotal}>{type ? formatPrice(total) : '—'}</Text>
+            {!walletLoading && walletBalance > 0 && (
+              <Text style={styles.barWallet}>Wallet: ₦{walletBalance.toFixed(2)}</Text>
+            )}
           </View>
           <TouchableOpacity style={[styles.go, (!type || loading || soldOut || (!isStaff && (subLoading || subscriptionBlocked))) && styles.goOff]} disabled={!type || loading || soldOut || (!isStaff && (subLoading || subscriptionBlocked))} onPress={go} activeOpacity={0.85}>
-            <Text style={styles.goT}>{soldOut ? 'Closed' : loading || (!isStaff && subLoading) ? 'Loading…' : subscriptionBlocked ? 'Subscribe first' : 'Continue'}</Text>
+            <Text style={styles.goT}>{soldOut ? 'Closed' : loading || (!isStaff && subLoading) ? 'Loading…' : subscriptionBlocked ? 'Subscribe first' : canPayWithWallet ? 'Pay with Wallet' : 'Continue'}</Text>
             <MaterialIcons name="arrow-forward" size={19} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
-        <Text style={styles.fee}>No service fee • Paystack secure checkout • ₦700 monthly subscription required</Text>
+        <Text style={styles.fee}>No service fee • Paystack or Wallet checkout • ₦700 monthly subscription required</Text>
       </View>
     </View>
   );
@@ -335,6 +409,7 @@ const styles = StyleSheet.create({
   barCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFFFF', borderRadius: 18, padding: 14, paddingLeft: 18, borderWidth: 1, borderColor: '#E9E9EE' },
   barLab: { fontSize: 12.5, fontWeight: '600', color: '#6B7280' },
   barTotal: { fontSize: 22, fontWeight: '800', color: '#1C1C1E', letterSpacing: -0.5 },
+  barWallet: { fontSize: 11, fontWeight: '700', color: GREEN, marginTop: 2 },
   go: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: GREEN, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 14 },
   goOff: { backgroundColor: '#C7C7CC' },
   goT: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
