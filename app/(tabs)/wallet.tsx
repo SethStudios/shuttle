@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator,
+  TextInput,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Haptics from 'expo-haptics';
@@ -26,11 +27,13 @@ export default function WalletScreen() {
 
   // Transfer flow state
   const [showTransfer, setShowTransfer] = useState(false);
-  const [transferStep, setTransferStep] = useState<'matric' | 'amount' | 'confirm' | 'pin' | 'success'>('matric');
+  const [transferStep, setTransferStep] = useState<'matric' | 'amount' | 'pin' | 'setPin' | 'success'>('matric');
   const [recipientMatric, setRecipientMatric] = useState('');
-  const [transferAmount, setTransferAmount] = useState('');
   const [recipientName, setRecipientName] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
   const [transferPin, setTransferPin] = useState('');
+  const [setPinValue, setSetPinValue] = useState('');
+  const [setPinConfirm, setSetPinConfirm] = useState('');
 
   // Custom alert states
   const [alertVisible, setAlertVisible] = useState(false);
@@ -69,9 +72,12 @@ export default function WalletScreen() {
     fetchBalance();
   }, [fetchBalance]);
 
-  // ── Transfer flow ──
+  // ── Transfer Step 1: Look up recipient by matric ──
   const lookupRecipient = async () => {
-    if (!recipientMatric.trim()) return;
+    if (!recipientMatric.trim()) {
+      showAlert('Enter matric', 'Please enter the recipient matric number.', 'error');
+      return;
+    }
     setTransferLoading(true);
     try {
       const { data: profile, error: profileError } = await supabase
@@ -93,7 +99,12 @@ export default function WalletScreen() {
     }
   };
 
-  const confirmTransfer = async () => {
+  // ── Transfer Step 3: Execute transfer with PIN ──
+  const executeTransfer = async () => {
+    if (!transferPin || transferPin.length !== 4) {
+      showAlert('PIN required', 'Please enter your 4-digit wallet PIN.', 'error');
+      return;
+    }
     const amt = parseFloat(transferAmount);
     if (!amt || amt <= 0) {
       showAlert('Invalid amount', 'Please enter a valid transfer amount.', 'error');
@@ -103,24 +114,28 @@ export default function WalletScreen() {
       showAlert('Insufficient balance', `You only have ₦${balance.toFixed(2)} in your wallet.`, 'error');
       return;
     }
-    setTransferStep('pin');
-  };
 
-  const executeTransfer = async () => {
-    if (!transferPin || transferPin.length !== 4) {
-      showAlert('PIN required', 'Please enter your 4-digit wallet PIN.', 'error');
-      return;
-    }
     setTransferLoading(true);
     try {
       const { data, error } = await supabase.rpc('wallet_transfer', {
         p_from_user_id: user!.id,
         p_to_matric: recipientMatric.trim(),
-        p_amount: parseFloat(transferAmount),
+        p_amount: amt,
         p_pin: transferPin,
       });
       if (error) throw error;
       if (!data?.ok) {
+        if ((data as any)?.reason === 'invalid_pin') {
+          showAlert(
+            'Set wallet PIN',
+            'You have not set a wallet PIN yet. Set a 4-digit PIN to authorize transfers.',
+            'warning',
+            () => {
+              setTransferStep('setPin');
+            }
+          );
+          return;
+        }
         showAlert('Transfer failed', (data as any)?.reason || 'Transfer could not be completed.', 'error');
         return;
       }
@@ -134,13 +149,40 @@ export default function WalletScreen() {
     }
   };
 
+  const setPin = async () => {
+    if (!setPinValue || setPinValue.length !== 4) {
+      showAlert('PIN required', 'Please enter a 4-digit PIN.', 'error');
+      return;
+    }
+    if (setPinValue !== setPinConfirm) {
+      showAlert('PIN mismatch', 'The two PIN entries do not match.', 'error');
+      return;
+    }
+    setTransferLoading(true);
+    try {
+      const { error } = await supabase.rpc('wallet_set_pin', {
+        p_user_id: user!.id,
+        p_pin: setPinValue,
+      });
+      if (error) throw error;
+      setTransferPin(setPinValue);
+      setTransferStep('pin');
+    } catch (err: any) {
+      showAlert('PIN setup failed', err?.message || 'Could not set PIN.', 'error');
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
   const resetTransfer = () => {
     setShowTransfer(false);
     setTransferStep('matric');
     setRecipientMatric('');
-    setTransferAmount('');
     setRecipientName('');
+    setTransferAmount('');
     setTransferPin('');
+    setSetPinValue('');
+    setSetPinConfirm('');
   };
 
   if (loading) {
@@ -221,8 +263,9 @@ export default function WalletScreen() {
 
             {/* Step 1: Matric Number */}
             {transferStep === 'matric' && (
-              <View>
-                <Text style={styles.modalStepTitle}>Recipient Matric Number</Text>
+              <View style={styles.stepContent}>
+                <Text style={styles.modalStepTitle}>Send money to</Text>
+                <Text style={styles.modalSubtle}>Enter the recipient's matric number</Text>
                 <View style={styles.inputRow}>
                   <MaterialIcons name="school" size={20} color="#8E8E93" />
                   <TextInputStyled
@@ -232,21 +275,26 @@ export default function WalletScreen() {
                     autoCapitalize="characters"
                   />
                 </View>
-                <AppleButton
-                  title={transferLoading ? 'Looking up…' : 'Look up recipient'}
-                  loading={transferLoading}
-                  disabled={transferLoading || !recipientMatric.trim()}
-                  onPress={lookupRecipient}
-                  variant="plain"
-                  style={{ marginTop: 16 }}
-                />
-                <Text style={styles.modalHint}>Ask the recipient for their matric number.</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 20 }}>
+                  <AppleButton
+                    title="Cancel"
+                    onPress={resetTransfer}
+                    variant="plain"
+                  />
+                  <AppleButton
+                    title={transferLoading ? 'Looking up…' : 'Next'}
+                    loading={transferLoading}
+                    disabled={transferLoading || !recipientMatric.trim()}
+                    onPress={lookupRecipient}
+                    variant="primary"
+                  />
+                </View>
               </View>
             )}
 
             {/* Step 2: Amount */}
             {transferStep === 'amount' && (
-              <View>
+              <View style={styles.stepContent}>
                 <View style={styles.modalRecipientRow}>
                   <View style={styles.recipientInfo}>
                     <MaterialIcons name="person" size={20} color={GREEN} />
@@ -256,7 +304,7 @@ export default function WalletScreen() {
                     </View>
                   </View>
                 </View>
-                <Text style={styles.modalStepTitle}>Transfer Amount</Text>
+                <Text style={styles.modalStepTitle}>Amount to send</Text>
                 <View style={styles.inputRow}>
                   <Text style={styles.currencyPrefix}>₦</Text>
                   <TextInputStyled
@@ -269,49 +317,14 @@ export default function WalletScreen() {
                 <View style={styles.balanceHint}>
                   <Text>Available balance: ₦{balance.toFixed(2)}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 20 }}>
                   <AppleButton
                     title="Back"
                     onPress={() => setTransferStep('matric')}
                     variant="plain"
                   />
                   <AppleButton
-                    title="Continue"
-                    onPress={confirmTransfer}
-                    variant="primary"
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* Step 3: Confirm */}
-            {transferStep === 'confirm' && (
-              <View>
-                <Text style={styles.modalStepTitle}>Confirm Transfer</Text>
-                <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>To:</Text>
-                  <Text style={styles.confirmValue}>{recipientName}</Text>
-                </View>
-                <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>Matric:</Text>
-                  <Text style={styles.confirmValue}>{recipientMatric}</Text>
-                </View>
-                <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>Amount:</Text>
-                  <Text style={styles.confirmValue}>₦{parseFloat(transferAmount || '0').toFixed(2)}</Text>
-                </View>
-                <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>New balance:</Text>
-                  <Text style={styles.confirmValue}>₦{(balance - parseFloat(transferAmount || '0')).toFixed(2)}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 20 }}>
-                  <AppleButton
-                    title="Back"
-                    onPress={() => setTransferStep('amount')}
-                    variant="plain"
-                  />
-                  <AppleButton
-                    title="Confirm"
+                    title="Send"
                     onPress={() => setTransferStep('pin')}
                     variant="primary"
                   />
@@ -319,11 +332,11 @@ export default function WalletScreen() {
               </View>
             )}
 
-            {/* Step 4: PIN */}
+            {/* Step 3: PIN */}
             {transferStep === 'pin' && (
-              <View>
-                <Text style={styles.modalStepTitle}>Enter Wallet PIN</Text>
-                <Text style={styles.modalSubtle}>Enter your 4-digit PIN to authorize the transfer.</Text>
+              <View style={styles.stepContent}>
+                <Text style={styles.modalStepTitle}>Confirm with PIN</Text>
+                <Text style={styles.modalSubtle}>Enter your 4-digit wallet PIN to authorize this transfer</Text>
                 <View style={styles.pinRow}>
                   {[0, 1, 2, 3].map((i) => (
                     <View key={i} style={styles.pinBox}>
@@ -331,14 +344,16 @@ export default function WalletScreen() {
                     </View>
                   ))}
                 </View>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 24 }}>
+                <View style={{ marginTop: 24 }}>
                   <AppleButton
                     title="Back"
-                    onPress={() => setTransferStep('confirm')}
+                    onPress={() => setTransferStep('amount')}
                     variant="plain"
                   />
+                </View>
+                <View style={{ marginTop: 12 }}>
                   <AppleButton
-                    title={transferLoading ? 'Transferring…' : 'Transfer'}
+                    title={transferLoading ? 'Transferring…' : 'Confirm transfer'}
                     loading={transferLoading}
                     disabled={transferLoading || transferPin.length < 4}
                     onPress={executeTransfer}
@@ -348,7 +363,49 @@ export default function WalletScreen() {
               </View>
             )}
 
-            {/* Step 5: Success */}
+            {/* Step 3b: Set PIN (first time) */}
+            {transferStep === 'setPin' && (
+              <View style={styles.stepContent}>
+                <Text style={styles.modalStepTitle}>Set your wallet PIN</Text>
+                <Text style={styles.modalSubtle}>Create a 4-digit PIN to authorize transfers</Text>
+                <View style={styles.inputRow}>
+                  <MaterialIcons name="lock" size={20} color="#8E8E93" />
+                  <TextInputStyled
+                    value={setPinValue}
+                    onChangeText={setSetPinValue}
+                    placeholder="Enter PIN"
+                    keyboardType="numeric"
+                    maxLength={4}
+                  />
+                </View>
+                <View style={styles.inputRow}>
+                  <MaterialIcons name="lock" size={20} color="#8E8E93" />
+                  <TextInputStyled
+                    value={setPinConfirm}
+                    onChangeText={setSetPinConfirm}
+                    placeholder="Confirm PIN"
+                    keyboardType="numeric"
+                    maxLength={4}
+                  />
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 20 }}>
+                  <AppleButton
+                    title="Cancel"
+                    onPress={() => setTransferStep('amount')}
+                    variant="plain"
+                  />
+                  <AppleButton
+                    title={transferLoading ? 'Setting up…' : 'Set PIN'}
+                    loading={transferLoading}
+                    disabled={transferLoading || setPinValue.length !== 4 || setPinValue !== setPinConfirm}
+                    onPress={setPin}
+                    variant="primary"
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Step 4: Success */}
             {transferStep === 'success' && (
               <View style={styles.successState}>
                 <MaterialIcons name="check-circle" size={48} color={GREEN} />
@@ -382,7 +439,6 @@ export default function WalletScreen() {
 }
 
 // ── TextInput component ──
-import { TextInput } from 'react-native';
 
 function TextInputStyled(props: {
   value: string;
@@ -390,6 +446,7 @@ function TextInputStyled(props: {
   placeholder?: string;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   keyboardType?: 'numeric' | 'default';
+  maxLength?: number;
 }) {
   return (
     <TextInput
@@ -399,6 +456,7 @@ function TextInputStyled(props: {
       placeholder={props.placeholder}
       autoCapitalize={props.autoCapitalize}
       keyboardType={props.keyboardType}
+      maxLength={props.maxLength}
     />
   );
 }
@@ -480,7 +538,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: { fontSize: 20, fontWeight: '800', color: '#1C1C1E' },
-  modalStepTitle: { fontSize: 15, fontWeight: '700', color: '#1C1C1E', marginBottom: 8 },
+  stepContent: { flex: 1 },
+  modalStepTitle: { fontSize: 15, fontWeight: '700', color: '#1C1C1E', marginBottom: 4 },
+  modalSubtle: { fontSize: 13, color: '#8E8E93', marginBottom: 16 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -493,7 +553,6 @@ const styles = StyleSheet.create({
   },
   currencyPrefix: { fontSize: 17, fontWeight: '800', color: '#1C1C1E', marginRight: 4 },
   textInput: { flex: 1, color: '#1C1C1E', fontSize: 17 },
-  modalHint: { fontSize: 13, color: '#8E8E93', marginTop: 8, textAlign: 'center' },
   balanceHint: { fontSize: 13, color: '#6B7280', marginTop: 12, textAlign: 'center' },
   modalRecipientRow: { marginBottom: 16 },
   recipientInfo: {
@@ -506,15 +565,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#CDE8D3',
   },
-  confirmRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F4',
-  },
-  confirmLabel: { fontSize: 14, color: '#6B7280' },
-  confirmValue: { fontSize: 14, fontWeight: '700', color: '#1C1C1E' },
   pinRow: { justifyContent: 'center', gap: 8, marginTop: 16 },
   pinBox: {
     width: 40,
@@ -527,7 +577,6 @@ const styles = StyleSheet.create({
     borderColor: '#E5E5EA',
   },
   pinText: { fontSize: 20, fontWeight: '800', color: '#1C1C1E' },
-  modalSubtle: { fontSize: 13, color: '#8E8E93', marginTop: 4, textAlign: 'center' },
   // Success
   successState: { alignItems: 'center', textAlign: 'center', marginTop: 20 },
   successTitle: { fontSize: 20, fontWeight: '800', color: '#1C1C1E', marginTop: 12 },
