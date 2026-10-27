@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator,
-  TextInput,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert,
+  TextInput, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,6 +15,7 @@ import { AppleButton } from '@/components/ui/Apple';
 import { CustomAlert } from '@/components/ui/CustomAlert';
 
 const GREEN = UniAbujaGreen[700];
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function WalletScreen() {
   const insets = useSafeAreaInsets();
@@ -28,13 +29,11 @@ export default function WalletScreen() {
 
   // Transfer flow state
   const [showTransfer, setShowTransfer] = useState(false);
-  const [transferStep, setTransferStep] = useState<'matric' | 'amount' | 'pin' | 'setPin' | 'success'>('matric');
+  const [transferStep, setTransferStep] = useState<'matric' | 'amount' | 'pin' | 'success'>('matric');
   const [recipientMatric, setRecipientMatric] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [transferAmount, setTransferAmount] = useState('');
   const [transferPin, setTransferPin] = useState('');
-  const [setPinValue, setSetPinValue] = useState('');
-  const [setPinConfirm, setSetPinConfirm] = useState('');
 
   // Custom alert states
   const [alertVisible, setAlertVisible] = useState(false);
@@ -64,7 +63,6 @@ export default function WalletScreen() {
       setBalance((data as any)?.balance || 0);
       setHasPin(!!(data as any)?.pin_hash);
     } catch {
-      // Wallet may not exist yet — that's OK
       setBalance(0);
       setHasPin(false);
     } finally {
@@ -103,7 +101,7 @@ export default function WalletScreen() {
     }
   };
 
-  // ── Transfer Step 3: Execute transfer with PIN ──
+  // ── Transfer Step 2: Execute transfer with PIN ──
   const executeTransfer = async () => {
     if (!transferPin || transferPin.length !== 4) {
       showAlert('PIN required', 'Please enter your 4-digit wallet PIN.', 'error');
@@ -166,34 +164,6 @@ export default function WalletScreen() {
     }
   };
 
-  // ── Set PIN (first time) ──
-  const setPin = async () => {
-    if (!setPinValue || setPinValue.length !== 4) {
-      showAlert('PIN required', 'Please enter a 4-digit PIN.', 'error');
-      return;
-    }
-    if (setPinValue !== setPinConfirm) {
-      showAlert('PIN mismatch', 'The two PIN entries do not match.', 'error');
-      return;
-    }
-    setTransferLoading(true);
-    try {
-      const { error } = await supabase.rpc('wallet_set_pin', {
-        p_user_id: user!.id,
-        p_pin: setPinValue,
-      });
-      if (error) throw error;
-      setHasPin(true);
-      setTransferPin(setPinValue);
-      setTransferStep('pin');
-      showAlert('PIN set', 'Your wallet PIN has been created. You can now transfer funds.', 'success');
-    } catch (err: any) {
-      showAlert('PIN setup failed', err?.message || 'Could not set PIN.', 'error');
-    } finally {
-      setTransferLoading(false);
-    }
-  };
-
   const resetTransfer = () => {
     setShowTransfer(false);
     setTransferStep('matric');
@@ -201,8 +171,6 @@ export default function WalletScreen() {
     setRecipientName('');
     setTransferAmount('');
     setTransferPin('');
-    setSetPinValue('');
-    setSetPinConfirm('');
   };
 
   if (loading) {
@@ -222,26 +190,39 @@ export default function WalletScreen() {
         contentContainerStyle={[styles.body, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.nav}>
-          <Text style={[styles.title, { textAlign: 'center' }]}>Wallet</Text>
-        </View>
-
-        {/* Balance card */}
-        <View style={styles.balanceCard}>
-          <MaterialIcons name="account-balance-wallet" size={28} color="#FFFFFF" />
-          <View style={styles.balanceInfo}>
-            <Text style={styles.balanceLabel}>Available Balance</Text>
-            <Text style={styles.balanceAmount}>₦{balance.toFixed(2)}</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Wallet</Text>
+            <Text style={styles.subtitle}>Manage your shuttle wallet balance</Text>
           </View>
-          {!hasPin && (
-            <View style={styles.pinNotice}>
-              <MaterialIcons name="lock-outline" size={16} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.pinNoticeText}>Set a PIN to transfer</Text>
-            </View>
-          )}
         </View>
 
-        {/* Action buttons */}
+        {/* Balance Card */}
+        <View style={styles.balanceCard}>
+          <View style={styles.balanceLeft}>
+            <MaterialIcons name="account-balance-wallet" size={32} color="rgba(255,255,255,0.9)" />
+            <View style={styles.balanceInfo}>
+              <Text style={styles.balanceLabel}>Available Balance</Text>
+              <Text style={styles.balanceAmount}>₦{balance.toFixed(2)}</Text>
+            </View>
+          </View>
+          <View style={styles.balanceRight}>
+            <MaterialIcons name="arrow-right" size={20} color="rgba(255,255,255,0.7)" />
+          </View>
+        </View>
+
+        {/* PIN Notice */}
+        {!hasPin && (
+          <View style={styles.pinNotice}>
+            <MaterialIcons name="lock-outline" size={18} color="#F59E0B" />
+            <Text style={styles.pinNoticeText}>
+              Set a 4-digit PIN to send money to friends
+            </Text>
+          </View>
+        )}
+
+        {/* Action Buttons */}
         <View style={styles.actionsContainer}>
           <View style={styles.actionsRow}>
             <TouchableOpacity
@@ -250,7 +231,7 @@ export default function WalletScreen() {
               activeOpacity={0.8}
             >
               <MaterialIcons name="add" size={24} color="#FFFFFF" />
-              <Text style={styles.actionBtnText}>Add funds</Text>
+              <Text style={styles.actionBtnText}>Add Funds</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionBtn}
@@ -258,7 +239,6 @@ export default function WalletScreen() {
                 if (!user) return;
                 if (!hasPin) {
                   showAlert('Set PIN first', 'Please create a 4-digit PIN before you can transfer funds.', 'warning', () => {
-                    setTransferStep('setPin');
                     setShowTransfer(true);
                   });
                   return;
@@ -275,10 +255,15 @@ export default function WalletScreen() {
 
         {/* Recent Transactions */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Transactions</Text>
+          </View>
           <View style={styles.emptyList}>
-            <MaterialIcons name="receipt" size={32} color="#8E8E93" />
-            <Text style={styles.emptyText}>No transactions yet</Text>
+            <MaterialIcons name="receipt" size={40} color="#8E8E93" />
+            <Text style={styles.emptyTitle}>No transactions yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Your top-ups and transfers will appear here
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -298,7 +283,7 @@ export default function WalletScreen() {
             {transferStep === 'matric' && (
               <View style={styles.stepContent}>
                 <Text style={styles.modalStepTitle}>Send money to</Text>
-                <Text style={styles.modalSubtle}>Enter the recipient's matric number</Text>
+                <Text style={styles.modalSubtle}>Enter the recipient&apos;s matric number</Text>
                 <View style={styles.inputRow}>
                   <MaterialIcons name="school" size={20} color="#8E8E93" />
                   <TextInputStyled
@@ -308,7 +293,7 @@ export default function WalletScreen() {
                     autoCapitalize="characters"
                   />
                 </View>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 20 }}>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 24 }}>
                   <AppleButton
                     title="Cancel"
                     onPress={resetTransfer}
@@ -332,8 +317,8 @@ export default function WalletScreen() {
                   <View style={styles.recipientInfo}>
                     <MaterialIcons name="person" size={20} color={GREEN} />
                     <View>
-                      <Text style={styles.modalStepTitle}>{recipientName}</Text>
-                      <Text style={styles.modalSubtle}>{recipientMatric}</Text>
+                      <Text style={styles.recipientName}>{recipientName}</Text>
+                      <Text style={styles.recipientMeta}>{recipientMatric}</Text>
                     </View>
                   </View>
                 </View>
@@ -348,16 +333,17 @@ export default function WalletScreen() {
                   />
                 </View>
                 <View style={styles.balanceHint}>
-                  <Text>Available balance: ₦{balance.toFixed(2)}</Text>
+                  <Text>Available balance:</Text>
+                  <Text style={styles.balanceHintValue}>₦{balance.toFixed(2)}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 20 }}>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 24 }}>
                   <AppleButton
                     title="Back"
                     onPress={() => setTransferStep('matric')}
                     variant="plain"
                   />
                   <AppleButton
-                    title="Send"
+                    title="Continue"
                     onPress={() => setTransferStep('pin')}
                     variant="primary"
                   />
@@ -396,52 +382,10 @@ export default function WalletScreen() {
               </View>
             )}
 
-            {/* Step 3b: Set PIN (first time) */}
-            {transferStep === 'setPin' && (
-              <View style={styles.stepContent}>
-                <Text style={styles.modalStepTitle}>Set your wallet PIN</Text>
-                <Text style={styles.modalSubtle}>Create a 4-digit PIN to authorize transfers</Text>
-                <View style={styles.inputRow}>
-                  <MaterialIcons name="lock" size={20} color="#8E8E93" />
-                  <TextInputStyled
-                    value={setPinValue}
-                    onChangeText={setSetPinValue}
-                    placeholder="Enter PIN"
-                    keyboardType="numeric"
-                    maxLength={4}
-                  />
-                </View>
-                <View style={styles.inputRow}>
-                  <MaterialIcons name="lock" size={20} color="#8E8E93" />
-                  <TextInputStyled
-                    value={setPinConfirm}
-                    onChangeText={setSetPinConfirm}
-                    placeholder="Confirm PIN"
-                    keyboardType="numeric"
-                    maxLength={4}
-                  />
-                </View>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 20 }}>
-                  <AppleButton
-                    title="Cancel"
-                    onPress={() => setTransferStep('amount')}
-                    variant="plain"
-                  />
-                  <AppleButton
-                    title={transferLoading ? 'Setting up…' : 'Set PIN'}
-                    loading={transferLoading}
-                    disabled={transferLoading || setPinValue.length !== 4 || setPinValue !== setPinConfirm}
-                    onPress={setPin}
-                    variant="primary"
-                  />
-                </View>
-              </View>
-            )}
-
             {/* Step 4: Success */}
             {transferStep === 'success' && (
               <View style={styles.successState}>
-                <MaterialIcons name="check-circle" size={48} color={GREEN} />
+                <MaterialIcons name="check-circle" size={56} color={GREEN} />
                 <Text style={styles.successTitle}>Transfer Successful</Text>
                 <Text style={styles.successSubtle}>
                   ₦{parseFloat(transferAmount || '0').toFixed(2)} sent to {recipientName}
@@ -472,7 +416,6 @@ export default function WalletScreen() {
 }
 
 // ── TextInput component ──
-
 function TextInputStyled(props: {
   value: string;
   onChangeText: (v: string) => void;
@@ -497,45 +440,56 @@ function TextInputStyled(props: {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F2F2F7' },
   body: { paddingHorizontal: 20 },
-  nav: { marginBottom: 24 },
-  title: { fontSize: 32, fontWeight: '800', color: '#1C1C1E', letterSpacing: -0.8, textAlign: 'center' },
+  header: { marginBottom: 24 },
+  headerContent: {
+    alignItems: 'center',
+  },
+  title: { fontSize: 34, fontWeight: '800', color: '#1C1C1E', letterSpacing: -0.8, textAlign: 'center' },
+  subtitle: { fontSize: 15, color: '#6B7280', marginTop: 6, textAlign: 'center' },
   balanceCard: {
     backgroundColor: GREEN,
-    borderRadius: 28,
-    padding: 28,
-    marginBottom: 28,
+    borderRadius: 30,
+    padding: 24,
+    marginBottom: 24,
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    ...StyleSheet.flatten([
+      { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 16 },
+      { elevation: 8 },
+    ]),
   },
-  balanceInfo: {
-    flex: 1,
-  },
+  balanceLeft: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  balanceInfo: { marginLeft: 12 },
   balanceLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.85)',
     letterSpacing: 0.8,
-    marginBottom: 6,
+    marginBottom: 4,
   },
-  balanceAmount: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
+  balanceAmount: { fontSize: 56, fontWeight: '800', color: '#FFFFFF', letterSpacing: -1 },
+  balanceRight: { marginRight: 4 },
   pinNotice: {
-    marginTop: 8,
+    marginTop: 0,
+    marginBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
   pinNoticeText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.9)',
+    color: '#92400E',
   },
-  actionsContainer: { marginBottom: 28 },
+  actionsContainer: { marginBottom: 24 },
   actionsRow: {
     flexDirection: 'row',
     gap: 12,
@@ -549,17 +503,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
-    minHeight: 60,
+    minHeight: 56,
+    ...StyleSheet.flatten([
+      { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8 },
+      { elevation: 5 },
+    ]),
   },
-  actionBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
+  actionBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
   sectionContainer: { marginBottom: 20 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#6B7280', marginBottom: 12 },
-  emptyList: { alignItems: 'center', paddingVertical: 40, gap: 8 },
-  emptyText: { fontSize: 15, color: '#6B7280', fontWeight: '600' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#6B7280', letterSpacing: 0.5 },
+  emptyList: { alignItems: 'center', paddingVertical: 50, gap: 10 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1E' },
+  emptySubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center' },
   // Modal
   modalBackdrop: {
     flex: 1,
@@ -569,60 +525,69 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 28,
+    padding: 24,
     width: '88%',
-    maxWidth: 340,
+    maxWidth: 360,
     maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   modalTitle: { fontSize: 20, fontWeight: '800', color: '#1C1C1E' },
   stepContent: { flex: 1 },
-  modalStepTitle: { fontSize: 15, fontWeight: '700', color: '#1C1C1E', marginBottom: 4 },
-  modalSubtle: { fontSize: 13, color: '#8E8E93', marginBottom: 16 },
+  modalStepTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1E', marginBottom: 4 },
+  modalSubtle: { fontSize: 13, color: '#6B7280', marginBottom: 16 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F2F2F7',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 52,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 56,
     borderWidth: 1,
     borderColor: '#E5E5EA',
   },
-  currencyPrefix: { fontSize: 17, fontWeight: '800', color: '#1C1C1E', marginRight: 4 },
+  currencyPrefix: { fontSize: 18, fontWeight: '800', color: '#1C1C1E', marginRight: 6 },
   textInput: { flex: 1, color: '#1C1C1E', fontSize: 17 },
-  balanceHint: { fontSize: 13, color: '#6B7280', marginTop: 12, textAlign: 'center' },
+  balanceHint: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingHorizontal: 4,
+  },
+  balanceHintValue: { fontSize: 15, fontWeight: '700', color: GREEN },
   modalRecipientRow: { marginBottom: 16 },
   recipientInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     backgroundColor: '#F0F9F3',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#CDE8D3',
   },
+  recipientName: { fontSize: 15, fontWeight: '700', color: '#1C1C1E' },
+  recipientMeta: { fontSize: 13, color: '#6B7280' },
   pinRow: { justifyContent: 'center', gap: 8, marginTop: 16 },
   pinBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: '#F2F2F7',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#E5E5EA',
   },
-  pinText: { fontSize: 20, fontWeight: '800', color: '#1C1C1E' },
+  pinText: { fontSize: 22, fontWeight: '800', color: '#1C1C1E' },
   // Success
-  successState: { alignItems: 'center', textAlign: 'center', marginTop: 20 },
-  successTitle: { fontSize: 20, fontWeight: '800', color: '#1C1C1E', marginTop: 12 },
-  successSubtle: { fontSize: 14, color: '#6B7280', marginTop: 4 },
+  successState: { alignItems: 'center', textAlign: 'center', marginTop: 24 },
+  successTitle: { fontSize: 22, fontWeight: '800', color: '#1C1C1E', marginTop: 16 },
+  successSubtle: { fontSize: 15, color: '#6B7280', marginTop: 6 },
 });

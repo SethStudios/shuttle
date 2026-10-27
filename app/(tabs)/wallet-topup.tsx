@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -17,7 +18,7 @@ import { CALLBACK_BASE } from '@/constants/app';
 
 const GREEN = UniAbujaGreen[700];
 
-const TOP_UP_AMOUNTS = [1000, 2000, 5000, 10000];
+const TOP_UP_AMOUNTS = [500, 1000, 2000, 5000, 10000];
 
 export default function WalletTopUpScreen() {
   const insets = useSafeAreaInsets();
@@ -25,7 +26,6 @@ export default function WalletTopUpScreen() {
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(false);
-  const [webviewLoading, setWebviewLoading] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState('');
   const [reference, setReference] = useState('');
   const [webError, setWebError] = useState<string | null>(null);
@@ -53,7 +53,7 @@ export default function WalletTopUpScreen() {
 
   const handleTopUp = async () => {
     if (!amountToUse || amountToUse < 100) {
-      showAlert('Invalid amount', 'Please enter an amount of ₦100 or more.');
+      showAlert('Invalid amount', 'Please enter an amount of ₦100 or more.', 'error');
       return;
     }
     if (!user) return;
@@ -80,7 +80,6 @@ export default function WalletTopUpScreen() {
     if (verified) return; // Prevent double verification
     setVerified(true);
     setLoading(true);
-    setWebviewLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('wallet-verify', {
         body: { reference: ref },
@@ -89,7 +88,6 @@ export default function WalletTopUpScreen() {
       if (!data?.verified) {
         showAlert('Payment not confirmed', data?.reason || 'Paystack did not confirm this payment.', 'error', () => {
           setCheckoutUrl('');
-          setWebviewLoading(false);
           setVerified(false);
         });
         return;
@@ -98,16 +96,15 @@ export default function WalletTopUpScreen() {
       showAlert('Wallet Topped Up', `₦${amountToUse.toLocaleString()} has been added to your wallet.`, 'success', () => {
         setCheckoutUrl('');
         setReference('');
+        setVerified(false);
         router.replace('/(tabs)/wallet');
       });
     } catch (err: any) {
       showAlert('Verification failed', err?.message || 'Could not verify payment.', 'error', () => {
-        setWebviewLoading(false);
         setVerified(false);
       });
     } finally {
       setLoading(false);
-      setWebviewLoading(false);
     }
   };
 
@@ -242,6 +239,9 @@ export default function WalletTopUpScreen() {
               onPress={handleTopUp}
               variant="primary"
             />
+            <Text style={styles.bankTransferNote}>
+              You can pay with card or bank transfer on Paystack
+            </Text>
           </View>
         </ScrollView>
       )}
@@ -253,7 +253,7 @@ export default function WalletTopUpScreen() {
         message={alertMessage}
         type={alertType}
         onConfirm={alertOnConfirm}
-        loading={loading || webviewLoading}
+        loading={loading}
       />
     </View>
   );
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
   amountRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   amountBtn: {
     flex: 1,
-    minWidth: 75,
+    minWidth: 72,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingVertical: 14,
@@ -291,6 +291,13 @@ const styles = StyleSheet.create({
   customInput: { flex: 1, color: '#1C1C1E', fontSize: 17, marginRight: 12 },
   depositSummary: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 12 },
   depositAmount: { fontWeight: '800', color: GREEN },
+  bankTransferNote: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
+  },
   // WebView overlay
   webviewOverlay: {
     position: 'absolute',
