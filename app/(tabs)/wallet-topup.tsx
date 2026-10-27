@@ -13,6 +13,7 @@ import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { UniAbujaGreen } from '@/constants/theme';
 import { AppleButton } from '@/components/ui/Apple';
+import { CALLBACK_BASE } from '@/constants/app';
 
 const GREEN = UniAbujaGreen[700];
 
@@ -27,6 +28,7 @@ export default function WalletTopUpScreen() {
   const [webviewLoading, setWebviewLoading] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState('');
   const [reference, setReference] = useState('');
+  const [webError, setWebError] = useState<string | null>(null);
 
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
@@ -41,6 +43,7 @@ export default function WalletTopUpScreen() {
     if (!user) return;
 
     setLoading(true);
+    setWebError(null);
     try {
       const { data, error } = await supabase.functions.invoke('wallet-top-up', {
         body: { amount: amountToUse },
@@ -50,7 +53,6 @@ export default function WalletTopUpScreen() {
 
       setCheckoutUrl(data.data.authorization_url);
       setReference(data.data.reference);
-      setWebviewLoading(true);
     } catch (err: any) {
       Alert.alert('Top up failed', err?.message || 'Could not start top up. Try again.');
     } finally {
@@ -60,6 +62,7 @@ export default function WalletTopUpScreen() {
 
   const verifyPayment = async (ref: string) => {
     setLoading(true);
+    setWebviewLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('wallet-verify', {
         body: { reference: ref },
@@ -67,6 +70,7 @@ export default function WalletTopUpScreen() {
       if (error) throw new Error(error.message || 'Verification failed');
       if (!data?.verified) {
         Alert.alert('Payment not confirmed', data?.reason || 'Paystack did not confirm this payment.');
+        setCheckoutUrl('');
         setWebviewLoading(false);
         return;
       }
@@ -83,7 +87,7 @@ export default function WalletTopUpScreen() {
 
   const onNav = useCallback(
     (nav: WebViewNavigation) => {
-      if (nav.url.startsWith('https://uniabujashuttle.app/wallet-callback')) {
+      if (nav.url.startsWith(CALLBACK_BASE)) {
         const m = nav.url.match(/[?&](reference|trxref)=([^&#]+)/);
         if (m) {
           const ref = decodeURIComponent(m[2]);
@@ -94,14 +98,21 @@ export default function WalletTopUpScreen() {
     [verifyPayment]
   );
 
-  if (loading || webviewLoading) {
+  const onWebError = useCallback(
+    (e: { nativeEvent: { url?: string; message?: string } }) => {
+      const url = (e.nativeEvent as { url?: string; message?: string }).url || '';
+      const msg = (e.nativeEvent as { url?: string; message?: string }).message || '';
+      setWebError(msg || `Failed to load: ${url}`);
+    },
+    []
+  );
+
+  if (loading && !checkoutUrl) {
     return (
       <View style={[styles.root, { alignItems: 'center', justifyContent: 'center' }]}>
         <StatusBar style="dark" />
         <ActivityIndicator size="large" color={GREEN} />
-        <Text style={{ marginTop: 12, color: '#6B7280' }}>
-          {webviewLoading ? 'Processing payment…' : 'Preparing checkout…'}
-        </Text>
+        <Text style={{ marginTop: 12, color: '#6B7280' }}>Preparing checkout…</Text>
       </View>
     );
   }
@@ -109,89 +120,104 @@ export default function WalletTopUpScreen() {
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
-      <ScrollView
-        contentContainerStyle={[styles.body, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 24 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.nav}>
-          <TouchableOpacity style={styles.back} onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back" size={24} color="#1C1C1E" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Add Funds</Text>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Amount to Deposit</Text>
-          <View style={styles.amountRow}>
-            {TOP_UP_AMOUNTS.map((amt) => (
-              <TouchableOpacity
-                key={amt}
-                style={[styles.amountBtn, selectedAmount === amt && styles.amountBtnSelected]}
-                onPress={() => {
-                  setSelectedAmount(selectedAmount === amt ? null : amt);
-                  if (selectedAmount === amt) setCustomAmount('');
-                  else setCustomAmount('');
-                }}
-              >
-                <Text style={[styles.amountText, selectedAmount === amt && styles.amountTextSelected]}>
-                  ₦{amt.toLocaleString()}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View style={styles.customInputRow}>
-            <Text style={styles.customInputLabel}>Or enter custom amount</Text>
-            <View style={styles.customInputWrap}>
-              <Text style={styles.currencyPrefix}>₦</Text>
-              <TextInput
-                style={styles.customInput}
-                value={customAmount}
-                onChangeText={setCustomAmount}
-                placeholder="0"
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-          {amountToUse > 0 && (
-            <Text style={styles.depositSummary}>
-              You are depositing: <Text style={styles.depositAmount}>₦{amountToUse.toLocaleString()}</Text>
-            </Text>
-          )}
-          <AppleButton
-            title="Continue to Paystack"
-            loading={loading}
-            disabled={amountToUse < 100}
-            onPress={handleTopUp}
-            variant="primary"
-          />
-        </View>
-      </ScrollView>
 
       {/* WebView overlay for Paystack checkout */}
       {checkoutUrl && (
         <View style={styles.webviewOverlay}>
           <View style={styles.webviewHeader}>
-            <TouchableOpacity style={styles.webClose} onPress={() => { setCheckoutUrl(''); setWebviewLoading(false); }}>
+            <TouchableOpacity style={styles.webClose} onPress={() => { setCheckoutUrl(''); setReference(''); setWebError(null); }}>
               <MaterialIcons name="close" size={24} color="#1C1C1E" />
             </TouchableOpacity>
             <Text style={styles.webTitle}>Secure Checkout</Text>
           </View>
-          <WebView
-            source={{ uri: checkoutUrl }}
-            style={styles.webview}
-            javaScriptEnabled
-            originWhitelist={['https://*']}
-            onNavigationStateChange={onNav}
-            startInLoadingState
-            renderLoading={() => (
-              <View style={styles.webLoading}>
-                <ActivityIndicator size="large" color={GREEN} />
-                <Text style={styles.webLoadingText}>Loading Paystack…</Text>
-              </View>
-            )}
-          />
+          {webError ? (
+            <View style={styles.webErrorView}>
+              <MaterialIcons name="wifi-off" size={48} color="#FF3B30" />
+              <Text style={styles.webErrorText}>{webError}</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={() => { setWebError(null); }}>
+                <Text style={styles.retryBtnText}>Try Again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <WebView
+              source={{ uri: checkoutUrl }}
+              style={styles.webview}
+              javaScriptEnabled
+              originWhitelist={['https://*']}
+              onNavigationStateChange={onNav}
+              onError={onWebError}
+              onHttpError={onWebError}
+              startInLoadingState
+              renderLoading={() => (
+                <View style={styles.webLoading}>
+                  <ActivityIndicator size="large" color={GREEN} />
+                  <Text style={styles.webLoadingText}>Loading Paystack…</Text>
+                </View>
+              )}
+            />
+          )}
         </View>
+      )}
+
+      {!checkoutUrl && (
+        <ScrollView
+          contentContainerStyle={[styles.body, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 24 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.nav}>
+            <TouchableOpacity style={styles.back} onPress={() => router.back()}>
+              <MaterialIcons name="arrow-back" size={24} color="#1C1C1E" />
+            </TouchableOpacity>
+            <Text style={styles.title}>Add Funds</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Amount to Deposit</Text>
+            <View style={styles.amountRow}>
+              {TOP_UP_AMOUNTS.map((amt) => (
+                <TouchableOpacity
+                  key={amt}
+                  style={[styles.amountBtn, selectedAmount === amt && styles.amountBtnSelected]}
+                  onPress={() => {
+                    setSelectedAmount(selectedAmount === amt ? null : amt);
+                    if (selectedAmount === amt) setCustomAmount('');
+                    else setCustomAmount('');
+                  }}
+                >
+                  <Text style={[styles.amountText, selectedAmount === amt && styles.amountTextSelected]}>
+                    ₦{amt.toLocaleString()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.customInputRow}>
+              <Text style={styles.customInputLabel}>Or enter custom amount</Text>
+              <View style={styles.customInputWrap}>
+                <Text style={styles.currencyPrefix}>₦</Text>
+                <TextInput
+                  style={styles.customInput}
+                  value={customAmount}
+                  onChangeText={setCustomAmount}
+                  placeholder="0"
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+            {amountToUse > 0 && (
+              <Text style={styles.depositSummary}>
+                You are depositing: <Text style={styles.depositAmount}>₦{amountToUse.toLocaleString()}</Text>
+              </Text>
+            )}
+            <AppleButton
+              title={loading ? 'Processing…' : 'Continue to Paystack'}
+              loading={loading}
+              disabled={amountToUse < 100 || loading}
+              onPress={handleTopUp}
+              variant="primary"
+            />
+          </View>
+        </ScrollView>
       )}
     </View>
   );
@@ -263,4 +289,14 @@ const styles = StyleSheet.create({
     zIndex: 101,
   },
   webLoadingText: { marginTop: 12, color: '#6B7280' },
+  webErrorView: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  webErrorText: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 16, marginBottom: 20 },
+  retryBtn: { backgroundColor: GREEN, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
+  retryBtnText: { color: '#FFFFFF', fontWeight: '700' },
 });
