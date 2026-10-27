@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
+  TextInput, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -14,6 +15,7 @@ import { AppleButton } from '@/components/ui/Apple';
 import { CustomAlert } from '@/components/ui/CustomAlert';
 
 const GREEN = UniAbujaGreen[700];
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function WalletSetPinScreen() {
   const insets = useSafeAreaInsets();
@@ -41,15 +43,6 @@ export default function WalletSetPinScreen() {
   };
 
   const savePin = async () => {
-    if (pin.length !== 4) {
-      showAlert('PIN required', 'Please enter a 4-digit PIN.', 'error');
-      return;
-    }
-    if (pin !== confirmPin) {
-      showAlert('PIN mismatch', 'The two PIN entries do not match.', 'error');
-      return;
-    }
-
     setLoading(true);
     try {
       const { error } = await supabase.rpc('wallet_set_pin', {
@@ -95,14 +88,6 @@ export default function WalletSetPinScreen() {
     }
   };
 
-  const clearAll = () => {
-    if (isConfirming) {
-      setConfirmPin('');
-    } else {
-      setPin('');
-    }
-  };
-
   if (loading) {
     return (
       <View style={[styles.root, { alignItems: 'center', justifyContent: 'center' }]}>
@@ -130,34 +115,22 @@ export default function WalletSetPinScreen() {
 
         <View style={styles.card}>
           <View style={styles.headerText}>
-            <Text style={styles.modalTitle}>Create your wallet PIN</Text>
+            <Text style={styles.modalTitle}>
+              {isConfirming ? 'Confirm your PIN' : 'Create your wallet PIN'}
+            </Text>
             <Text style={styles.subtitle}>
-              This PIN will be used to authorize wallet transfers
+              {isConfirming ? 'Enter your PIN again to confirm' : 'This PIN will be used to authorize wallet transfers'}
             </Text>
           </View>
 
           {/* PIN Circles */}
           <View style={styles.pinRow}>
             {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={[styles.pinBox, pin.length > i && styles.pinBoxFilled]}>
-                {pin.length > i && <Text style={styles.pinText}>•</Text>}
+              <View key={i} style={[styles.pinBox, (isConfirming ? confirmPin : pin).length > i && styles.pinBoxFilled]}>
+                {(isConfirming ? confirmPin : pin).length > i && <Text style={styles.pinText}>•</Text>}
               </View>
             ))}
           </View>
-
-          {/* Confirm PIN section */}
-          {pin.length === 4 && (
-            <View style={styles.confirmSection}>
-              <Text style={styles.confirmTitle}>Confirm your PIN</Text>
-              <View style={styles.pinRow}>
-                {[0, 1, 2, 3].map((i) => (
-                  <View key={i} style={[styles.pinBox, confirmPin.length > i && styles.pinBoxFilled]}>
-                    {confirmPin.length > i && <Text style={styles.pinText}>•</Text>}
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
 
           {/* Numeric Keypad */}
           <View style={styles.keypad}>
@@ -209,28 +182,32 @@ export default function WalletSetPinScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Continue Button */}
-          {pin.length === 4 && (
-            <View style={{ marginTop: 32 }}>
-              <AppleButton
-                title={isConfirming ? 'Confirm PIN' : 'Continue'}
-                loading={loading}
-                disabled={loading || (isConfirming ? confirmPin.length !== 4 : false)}
-                onPress={() => {
-                  if (isConfirming) {
-                    savePin();
-                  } else {
-                    setIsConfirming(true);
-                    setConfirmPin('');
-                  }
-                }}
-                variant="primary"
-              />
-              <Text style={styles.hintText}>
-                {isConfirming ? 'Enter your PIN again to confirm' : 'Create a 4-digit PIN'}
-              </Text>
+          {/* Auto-advance: when 4 digits entered, switch to confirm */}
+          {pin.length === 4 && !isConfirming && (
+            <View style={styles.autoAdvanceBox}>
+              <Text style={styles.autoAdvanceText}>PIN entered. Confirm below.</Text>
             </View>
           )}
+
+          {/* Continue / Confirm Button */}
+          <View style={{ marginTop: 32 }}>
+            <AppleButton
+              title={isConfirming ? 'Confirm PIN' : 'Continue'}
+              loading={loading}
+              disabled={loading || (isConfirming ? confirmPin.length !== 4 : pin.length !== 4)}
+              onPress={() => {
+                if (isConfirming) {
+                  savePin();
+                } else {
+                  setIsConfirming(true);
+                }
+              }}
+              variant="primary"
+            />
+            <Text style={styles.hintText}>
+              {isConfirming ? 'Enter your PIN again to confirm' : 'Create a 4-digit PIN'}
+            </Text>
+          </View>
         </View>
       </ScrollView>
 
@@ -257,29 +234,34 @@ const styles = StyleSheet.create({
   headerText: { marginBottom: 32 },
   modalTitle: { fontSize: 22, fontWeight: '800', color: '#1C1C1E', marginBottom: 8 },
   subtitle: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 20 },
-  pinRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 32 },
+  pinRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    marginBottom: 40,
+  },
   pinBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     backgroundColor: '#F2F2F7',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#E5E5EA',
   },
   pinBoxFilled: {
     backgroundColor: GREEN,
     borderColor: GREEN,
   },
-  pinText: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
-  confirmSection: { marginBottom: 32 },
-  confirmTitle: { fontSize: 15, fontWeight: '700', color: '#1C1C1E', marginBottom: 12, textAlign: 'center' },
-  keypad: { marginBottom: 24 },
+  pinText: { fontSize: 24, fontWeight: '800', color: '#FFFFFF' },
+  keypad: {
+    marginTop: 16,
+  },
   keyBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: '#F2F2F7',
     alignItems: 'center',
     justifyContent: 'center',
@@ -287,6 +269,21 @@ const styles = StyleSheet.create({
   keyDelete: {
     backgroundColor: '#FFF5F5',
   },
-  keyText: { fontSize: 24, fontWeight: '700', color: '#1C1C1E' },
+  keyText: { fontSize: 26, fontWeight: '700', color: '#1C1C1E' },
+  autoAdvanceBox: {
+    alignItems: 'center',
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#F0F9F3',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CDE8D3',
+  },
+  autoAdvanceText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#059669',
+  },
   hintText: { fontSize: 13, color: '#6B7280', textAlign: 'center', marginTop: 12 },
 });
