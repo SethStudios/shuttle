@@ -1,5 +1,7 @@
-import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { useState, useCallback, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Alert,
+} from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -9,6 +11,9 @@ import { formatPrice, formatPeriod12, isWithinTicketLife, getShuttleLabel } from
 import { useBookings, type Booking } from '@/hooks/useBookings';
 import { useAuth } from '@/contexts/AuthContext';
 import { UniAbujaGreen } from '@/constants/theme';
+import { supabase } from '@/utils/supabase';
+import { AppleButton } from '@/components/ui/Apple';
+import { CustomAlert } from '@/components/ui/CustomAlert';
 
 const GREEN = UniAbujaGreen[700];
 const SCAN_HISTORY_KEY = '@scan_history';
@@ -20,27 +25,45 @@ export default function TicketsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { activeBookings, allBookings, loading, refreshing, refresh, error: bookingsError } = useBookings();
-  const history = allBookings.filter((b) => !activeBookings.some((a) => a.id === b.id));
   const isStaff = user?.user_metadata?.role === 'staff';
 
-  // Staff see tickets THEY scanned — never rider purchase history.
+  // History shows ALL bookings (past and completed trips)
+  // Active passes also live on Home, but appear here too for reference
+  const history = isStaff ? [] : allBookings;
+
+  // Custom alert states
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+  const [alertOnConfirm, setAlertOnConfirm] = useState(() => () => {});
+
+  // Delete booking state
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [bookingToDelete, setBookingToDelete] = useState<string | null>(null);
+
+  // Scans state (staff only)
   const [scans, setScans] = useState<ScanEntry[]>([]);
   const [scansLoading, setScansLoading] = useState(isStaff);
   const [scansRefreshing, setScansRefreshing] = useState(false);
   const [scansError, setScansError] = useState(false);
+
   const loadScans = useCallback(async () => {
     try {
+      setScansLoading(true);
       const raw = await AsyncStorage.getItem(SCAN_HISTORY_KEY);
       setScans(raw ? JSON.parse(raw) : []);
       setScansError(false);
     } catch {
-      // Storage failure must not masquerade as "no scans yet".
       setScansError(true);
     } finally {
       setScansLoading(false);
     }
   }, []);
-  useFocusEffect(useCallback(() => { if (isStaff) { setScansLoading(true); loadScans(); } }, [isStaff, loadScans]));
+
+  useFocusEffect(
+    useCallback(() => { if (isStaff) { setScansLoading(true); loadScans(); } }, [isStaff, loadScans])
+  );
 
   const refreshScans = useCallback(async () => {
     setScansRefreshing(true);
@@ -68,8 +91,57 @@ export default function TicketsScreen() {
 
   const open = (b: Booking) => router.push(`/ticket?bookingId=${encodeURIComponent(b.id)}&route=${encodeURIComponent(b.route_direction || 'main-to-mini')}` as any);
 
+  // ── Show alert ──
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', onConfirm: () => void = () => {}) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertOnConfirm(onConfirm);
+    setAlertVisible(true);
+  };
+
+  // ── Delete single booking ──
+  const deleteBooking = async (bookingId: string) => {
+    setDeleteLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('delete_own_booking', {
+        p_booking_id: bookingId,
+      });
+      if (error) throw error;
+      if (!data?.ok) {
+        showAlert('Delete failed', (data as any)?.reason || 'Could not delete booking.', 'error');
+        return;
+      }
+      await refresh();
+      showAlert('Deleted', 'Booking removed from history.', 'success');
+    } catch (err: any) {
+      showAlert('Delete failed', err?.message || 'Could not delete booking.', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // ── Clear all history ──
+  const clearAllHistory = async () => {
+    if (history.length === 0) return;
+    setDeleteLoading(true);
+    try {
+      const { error } = await supabase.rpc('delete_own_history', {
+        p_user_id: user!.id,
+      });
+      if (error) throw error;
+      await refresh();
+      showAlert('Cleared', 'All past trips removed from history.', 'success');
+    } catch (err: any) {
+      showAlert('Clear failed', err?.message || 'Could not clear history.', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const Card = ({ b }: { b: Booking }) => {
     const s = statusOf(b);
+    const canDelete = b.payment_status !== 'paid' || b.ticket_status !== 'unused';
     return (
       <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={() => open(b)}>
         <View style={styles.top}>
@@ -85,6 +157,23 @@ export default function TicketsScreen() {
           <View style={[styles.pill, { backgroundColor: s.bg }]}>
             <Text style={[styles.pillT, { color: s.c }]}>{s.l}</Text>
           </View>
+          {!canDelete ? null : (
+            <TouchableOpacity
+              style={styles.deleteBtn}
+              onPress={(e: any) => {
+                e.stopPropagation();
+                setBookingToDelete(b.id);
+                showAlert(
+                  'Delete booking?',
+                  'Remove this booking from your history?',
+                  'warning',
+                  () => deleteBooking(b.id),
+                );
+              }}
+            >
+              <MaterialIcons name="delete" size={20} color="#FF3B30" />
+            </TouchableOpacity>
+          )}
         </View>
         <View style={styles.meta}>
           <Text style={styles.metaT}>{fmt(b.travel_date)}</Text>
@@ -102,23 +191,20 @@ export default function TicketsScreen() {
     );
   };
 
-  return (
-    <View style={styles.root}>
-      <StatusBar style="dark" />
-      <ScrollView
-        contentContainerStyle={[styles.body, { paddingTop: insets.top + 10, paddingBottom: 28 }]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={isStaff ? scansRefreshing : refreshing} onRefresh={isStaff ? refreshScans : refresh} tintColor={GREEN} />}
-      >
-        <View style={styles.titleWrap}>
-          <Text style={styles.title}>{isStaff ? 'Scanned' : 'History'}</Text>
-        </View>
-        <Text style={styles.sub}>
-          {isStaff ? 'Tickets you have scanned at boarding.' : 'Your past and completed trips. Active passes live on Home.'}
-        </Text>
-
-        {isStaff ? (
-          scansLoading ? (
+  if (isStaff) {
+    return (
+      <View style={styles.root}>
+        <StatusBar style="dark" />
+        <ScrollView
+          contentContainerStyle={[styles.body, { paddingTop: insets.top + 10, paddingBottom: 28 }]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={scansRefreshing} onRefresh={refreshScans} tintColor={GREEN} />}
+        >
+          <View style={styles.titleWrap}>
+            <Text style={styles.title}>Scanned</Text>
+          </View>
+          <Text style={styles.sub}>Tickets you have scanned at boarding.</Text>
+          {scansLoading ? (
             <View style={styles.empty}>
               <ActivityIndicator size="large" color={GREEN} />
               <Text style={styles.mut}>Loading scans…</Text>
@@ -164,7 +250,28 @@ export default function TicketsScreen() {
               ))}
             </View>
           )
-        ) : loading ? (
+        }
+        </ScrollView>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.root}>
+      <StatusBar style="dark" />
+      <ScrollView
+        contentContainerStyle={[styles.body, { paddingTop: insets.top + 10, paddingBottom: 28 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={GREEN} />}
+      >
+        <View style={styles.titleWrap}>
+          <Text style={styles.title}>History</Text>
+        </View>
+        <Text style={styles.sub}>
+          Your past and completed trips. Active passes live on Home.
+        </Text>
+
+        {loading ? (
           <View style={styles.empty}>
             <ActivityIndicator size="large" color={GREEN} />
             <Text style={styles.mut}>Loading tickets…</Text>
@@ -190,18 +297,55 @@ export default function TicketsScreen() {
             <View style={styles.emptyIcon}>
               <MaterialIcons name="confirmation-num" size={30} color={GREEN} />
             </View>
-            <Text style={styles.emptyT}>No past trips yet</Text>
+            <Text style={styles.emptyT}>No trips yet</Text>
             <Text style={styles.mutCenter}>
-              Used and expired tickets will appear here.
+              Your booked trips will appear here.
             </Text>
             <TouchableOpacity style={styles.book} onPress={() => router.push('/booking')}>
               <Text style={styles.bookT}>Book Shuttle</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={{ gap: 10 }}>{history.map((b) => <Card key={b.id} b={b} />)}</View>
+          <>
+            {/* Clear all button */}
+            <View style={{ marginBottom: 16 }}>
+              <TouchableOpacity
+                style={styles.clearAllBtn}
+                onPress={() => {
+                  const deletable = history.filter(b => b.payment_status !== 'paid' || b.ticket_status !== 'unused');
+                  if (deletable.length === 0) {
+                    showAlert('Nothing to clear', 'No past trips to remove.', 'info');
+                    return;
+                  }
+                  showAlert(
+                    'Clear all history?',
+                    `Remove all ${deletable.length} past trip(s) from your history?`,
+                    'warning',
+                    () => clearAllHistory(),
+                  );
+                }}
+              >
+                <MaterialIcons name="delete-forever" size={20} color="#FF3B30" />
+                <Text style={styles.clearAllText}>Clear all history</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 10 }}>
+              {history.map((b) => <Card key={b.id} b={b} />)}
+            </View>
+          </>
         )}
       </ScrollView>
+
+      {/* Custom Alert */}
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onConfirm={alertOnConfirm}
+        loading={deleteLoading}
+      />
     </View>
   );
 }
@@ -212,7 +356,7 @@ const styles = StyleSheet.create({
   titleWrap: { textAlign: 'center', marginBottom: 4 },
   title: { fontSize: 32, fontWeight: '800', color: '#1C1C1E', letterSpacing: -0.8, textAlign: 'center' },
   sub: { fontSize: 15, color: '#6B7280', marginTop: 4, marginBottom: 16 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 15, borderWidth: 1, borderColor: '#E9E9EE' },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 15, borderWidth: 1, borderColor: '#E9E9EE', marginBottom: 10 },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   left: { flexDirection: 'row', alignItems: 'center', gap: 11, flex: 1 },
   icon: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#F0F9F3', alignItems: 'center', justifyContent: 'center' },
@@ -226,6 +370,7 @@ const styles = StyleSheet.create({
   price: { fontSize: 18, fontWeight: '800', color: GREEN, letterSpacing: -0.3 },
   view: { flexDirection: 'row', alignItems: 'center' },
   viewT: { fontSize: 13.5, fontWeight: '600', color: '#6B7280' },
+  deleteBtn: { padding: 6 },
   empty: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#E9E9EE' },
   emptyIcon: { width: 60, height: 60, borderRadius: 20, backgroundColor: '#F0F9F3', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   emptyT: { fontSize: 18, fontWeight: '800', color: '#1C1C1E', marginBottom: 6 },
@@ -239,4 +384,20 @@ const styles = StyleSheet.create({
   scanCode: { flex: 1, fontSize: 13.5, fontWeight: '600', color: '#1C1C1E' },
   scanMeta: { fontSize: 12, color: '#8E8E93', fontWeight: '600' },
   scanSep: { height: 1, backgroundColor: '#F0F0F4' },
+  clearAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFE9E8',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#FFE9E8',
+  },
+  clearAllText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FF3B30',
+  },
 });
