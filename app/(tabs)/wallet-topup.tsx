@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, Platform,
-  TextInput,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -13,6 +12,7 @@ import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { UniAbujaGreen } from '@/constants/theme';
 import { AppleButton } from '@/components/ui/Apple';
+import { CustomAlert } from '@/components/ui/CustomAlert';
 import { CALLBACK_BASE } from '@/constants/app';
 
 const GREEN = UniAbujaGreen[700];
@@ -29,15 +29,31 @@ export default function WalletTopUpScreen() {
   const [checkoutUrl, setCheckoutUrl] = useState('');
   const [reference, setReference] = useState('');
   const [webError, setWebError] = useState<string | null>(null);
+  const [verified, setVerified] = useState(false);
+
+  // Custom alert states
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+  const [alertOnConfirm, setAlertOnConfirm] = useState(() => () => {});
 
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
 
   const amountToUse = selectedAmount || (customAmount ? parseFloat(customAmount) : 0);
 
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', onConfirm: () => void = () => {}) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertOnConfirm(onConfirm);
+    setAlertVisible(true);
+  };
+
   const handleTopUp = async () => {
     if (!amountToUse || amountToUse < 100) {
-      Alert.alert('Invalid amount', 'Please enter an amount of ₦100 or more.');
+      showAlert('Invalid amount', 'Please enter an amount of ₦100 or more.');
       return;
     }
     if (!user) return;
@@ -54,13 +70,15 @@ export default function WalletTopUpScreen() {
       setCheckoutUrl(data.data.authorization_url);
       setReference(data.data.reference);
     } catch (err: any) {
-      Alert.alert('Top up failed', err?.message || 'Could not start top up. Try again.');
+      showAlert('Top up failed', err?.message || 'Could not start top up. Try again.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const verifyPayment = async (ref: string) => {
+    if (verified) return; // Prevent double verification
+    setVerified(true);
     setLoading(true);
     setWebviewLoading(true);
     try {
@@ -69,16 +87,24 @@ export default function WalletTopUpScreen() {
       });
       if (error) throw new Error(error.message || 'Verification failed');
       if (!data?.verified) {
-        Alert.alert('Payment not confirmed', data?.reason || 'Paystack did not confirm this payment.');
-        setCheckoutUrl('');
-        setWebviewLoading(false);
+        showAlert('Payment not confirmed', data?.reason || 'Paystack did not confirm this payment.', 'error', () => {
+          setCheckoutUrl('');
+          setWebviewLoading(false);
+          setVerified(false);
+        });
         return;
       }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      Alert.alert('Wallet Topped Up', `₦${amountToUse.toLocaleString()} has been added to your wallet.`);
-      router.replace('/(tabs)/wallet');
+      showAlert('Wallet Topped Up', `₦${amountToUse.toLocaleString()} has been added to your wallet.`, 'success', () => {
+        setCheckoutUrl('');
+        setReference('');
+        router.replace('/(tabs)/wallet');
+      });
     } catch (err: any) {
-      Alert.alert('Verification failed', err?.message || 'Could not verify payment.');
+      showAlert('Verification failed', err?.message || 'Could not verify payment.', 'error', () => {
+        setWebviewLoading(false);
+        setVerified(false);
+      });
     } finally {
       setLoading(false);
       setWebviewLoading(false);
@@ -125,7 +151,7 @@ export default function WalletTopUpScreen() {
       {checkoutUrl && (
         <View style={styles.webviewOverlay}>
           <View style={styles.webviewHeader}>
-            <TouchableOpacity style={styles.webClose} onPress={() => { setCheckoutUrl(''); setReference(''); setWebError(null); }}>
+            <TouchableOpacity style={styles.webClose} onPress={() => { setCheckoutUrl(''); setReference(''); setWebError(null); setVerified(false); }}>
               <MaterialIcons name="close" size={24} color="#1C1C1E" />
             </TouchableOpacity>
             <Text style={styles.webTitle}>Secure Checkout</Text>
@@ -134,7 +160,7 @@ export default function WalletTopUpScreen() {
             <View style={styles.webErrorView}>
               <MaterialIcons name="wifi-off" size={48} color="#FF3B30" />
               <Text style={styles.webErrorText}>{webError}</Text>
-              <TouchableOpacity style={styles.retryBtn} onPress={() => { setWebError(null); }}>
+              <TouchableOpacity style={styles.retryBtn} onPress={() => { setWebError(null); setVerified(false); }}>
                 <Text style={styles.retryBtnText}>Try Again</Text>
               </TouchableOpacity>
             </View>
@@ -219,6 +245,16 @@ export default function WalletTopUpScreen() {
           </View>
         </ScrollView>
       )}
+
+      {/* Custom Alert */}
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onConfirm={alertOnConfirm}
+        loading={loading || webviewLoading}
+      />
     </View>
   );
 }

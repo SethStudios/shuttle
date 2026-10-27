@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -11,6 +11,7 @@ import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { UniAbujaGreen } from '@/constants/theme';
 import { AppleButton } from '@/components/ui/Apple';
+import { CustomAlert } from '@/components/ui/CustomAlert';
 
 const GREEN = UniAbujaGreen[700];
 
@@ -30,6 +31,21 @@ export default function WalletScreen() {
   const [transferAmount, setTransferAmount] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [transferPin, setTransferPin] = useState('');
+
+  // Custom alert states
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+  const [alertOnConfirm, setAlertOnConfirm] = useState(() => () => {});
+
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', onConfirm: () => void = () => {}) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertOnConfirm(onConfirm);
+    setAlertVisible(true);
+  };
 
   // Fetch wallet balance
   const fetchBalance = useCallback(async () => {
@@ -65,13 +81,13 @@ export default function WalletScreen() {
         .maybeSingle();
       if (profileError) throw profileError;
       if (!profile) {
-        Alert.alert('Recipient not found', 'No user found with this matric number.');
+        showAlert('Recipient not found', 'No user found with this matric number.', 'error');
         return;
       }
       setRecipientName(profile.full_name);
       setTransferStep('amount');
     } catch (err: any) {
-      Alert.alert('Lookup failed', err?.message || 'Could not find recipient.');
+      showAlert('Lookup failed', err?.message || 'Could not find recipient.', 'error');
     } finally {
       setTransferLoading(false);
     }
@@ -80,11 +96,11 @@ export default function WalletScreen() {
   const confirmTransfer = async () => {
     const amt = parseFloat(transferAmount);
     if (!amt || amt <= 0) {
-      Alert.alert('Invalid amount', 'Please enter a valid transfer amount.');
+      showAlert('Invalid amount', 'Please enter a valid transfer amount.', 'error');
       return;
     }
     if (amt > balance) {
-      Alert.alert('Insufficient balance', `You only have ₦${balance.toFixed(2)} in your wallet.`);
+      showAlert('Insufficient balance', `You only have ₦${balance.toFixed(2)} in your wallet.`, 'error');
       return;
     }
     setTransferStep('pin');
@@ -92,7 +108,7 @@ export default function WalletScreen() {
 
   const executeTransfer = async () => {
     if (!transferPin || transferPin.length !== 4) {
-      Alert.alert('PIN required', 'Please enter your 4-digit wallet PIN.');
+      showAlert('PIN required', 'Please enter your 4-digit wallet PIN.', 'error');
       return;
     }
     setTransferLoading(true);
@@ -105,14 +121,14 @@ export default function WalletScreen() {
       });
       if (error) throw error;
       if (!data?.ok) {
-        Alert.alert('Transfer failed', (data as any)?.reason || 'Transfer could not be completed.');
+        showAlert('Transfer failed', (data as any)?.reason || 'Transfer could not be completed.', 'error');
         return;
       }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       setBalance((data as any).from_balance);
       setTransferStep('success');
     } catch (err: any) {
-      Alert.alert('Transfer failed', err?.message || 'Transfer could not be completed.');
+      showAlert('Transfer failed', err?.message || 'Transfer could not be completed.', 'error');
     } finally {
       setTransferLoading(false);
     }
@@ -351,6 +367,16 @@ export default function WalletScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       )}
+
+      {/* Custom Alert */}
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onConfirm={alertOnConfirm}
+        loading={transferLoading}
+      />
     </View>
   );
 }
