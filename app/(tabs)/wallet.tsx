@@ -3,8 +3,8 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator,
   TextInput,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Haptics from 'expo-haptics';
@@ -22,6 +22,7 @@ export default function WalletScreen() {
   const { user } = useAuth();
 
   const [balance, setBalance] = useState(0);
+  const [hasPin, setHasPin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [transferLoading, setTransferLoading] = useState(false);
 
@@ -50,27 +51,30 @@ export default function WalletScreen() {
     setAlertVisible(true);
   };
 
-  // Fetch wallet balance
-  const fetchBalance = useCallback(async () => {
+  // Fetch wallet balance and PIN status
+  const fetchWallet = useCallback(async () => {
     if (!user) { setLoading(false); return; }
     try {
       const { data, error } = await supabase
         .from('wallets')
-        .select('balance')
+        .select('balance, pin_hash')
         .eq('user_id', user.id)
         .maybeSingle();
       if (error) throw error;
       setBalance((data as any)?.balance || 0);
+      setHasPin(!!(data as any)?.pin_hash);
     } catch {
+      // Wallet may not exist yet — that's OK
       setBalance(0);
+      setHasPin(false);
     } finally {
       setLoading(false);
     }
   }, [user]);
 
   useEffect(() => {
-    fetchBalance();
-  }, [fetchBalance]);
+    fetchWallet();
+  }, [fetchWallet]);
 
   // ── Transfer Step 1: Look up recipient by matric ──
   const lookupRecipient = async () => {
@@ -125,30 +129,44 @@ export default function WalletScreen() {
       });
       if (error) throw error;
       if (!data?.ok) {
-        if ((data as any)?.reason === 'invalid_pin') {
-          showAlert(
-            'Set wallet PIN',
-            'You have not set a wallet PIN yet. Set a 4-digit PIN to authorize transfers.',
-            'warning',
-            () => {
-              setTransferStep('setPin');
-            }
-          );
+        const reason = (data as any)?.reason;
+        if (reason === 'invalid_pin') {
+          showAlert('Wrong PIN', 'The PIN you entered is incorrect. Please try again.', 'error');
           return;
         }
-        showAlert('Transfer failed', (data as any)?.reason || 'Transfer could not be completed.', 'error');
+        if (reason === 'wallet_not_found') {
+          showAlert('No wallet', 'You do not have a wallet yet. Please add funds first.', 'error', () => {
+            setShowTransfer(false);
+            router.push('/wallet-topup' as any);
+          });
+          return;
+        }
+        if (reason === 'insufficient_balance') {
+          showAlert('Insufficient balance', `You only have ₦${balance.toFixed(2)} in your wallet.`, 'error');
+          return;
+        }
+        if (reason === 'recipient_not_found') {
+          showAlert('Recipient not found', 'The recipient could not be found.', 'error');
+          return;
+        }
+        if (reason === 'cannot_transfer_to_self') {
+          showAlert('Cannot transfer', 'You cannot transfer money to yourself.', 'error');
+          return;
+        }
+        showAlert('Transfer failed', reason || 'Transfer could not be completed.', 'error');
         return;
       }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      setBalance((data as any).from_balance);
+      setBalance((data as any)?.from_balance ?? balance - amt);
       setTransferStep('success');
     } catch (err: any) {
-      showAlert('Transfer failed', err?.message || 'Transfer could not be completed.', 'error');
+      showAlert('Transfer failed', err?.message || 'Transfer could not be completed. Please check your connection.', 'error');
     } finally {
       setTransferLoading(false);
     }
   };
 
+  // ── Set PIN (first time) ──
   const setPin = async () => {
     if (!setPinValue || setPinValue.length !== 4) {
       showAlert('PIN required', 'Please enter a 4-digit PIN.', 'error');
@@ -165,8 +183,10 @@ export default function WalletScreen() {
         p_pin: setPinValue,
       });
       if (error) throw error;
+      setHasPin(true);
       setTransferPin(setPinValue);
       setTransferStep('pin');
+      showAlert('PIN set', 'Your wallet PIN has been created. You can now transfer funds.', 'success');
     } catch (err: any) {
       showAlert('PIN setup failed', err?.message || 'Could not set PIN.', 'error');
     } finally {
@@ -213,6 +233,12 @@ export default function WalletScreen() {
             <Text style={styles.balanceLabel}>Available Balance</Text>
             <Text style={styles.balanceAmount}>₦{balance.toFixed(2)}</Text>
           </View>
+          {!hasPin && (
+            <View style={styles.pinNotice}>
+              <MaterialIcons name="lock-outline" size={16} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.pinNoticeText}>Set a PIN to transfer</Text>
+            </View>
+          )}
         </View>
 
         {/* Action buttons */}
@@ -230,6 +256,13 @@ export default function WalletScreen() {
               style={styles.actionBtn}
               onPress={() => {
                 if (!user) return;
+                if (!hasPin) {
+                  showAlert('Set PIN first', 'Please create a 4-digit PIN before you can transfer funds.', 'warning', () => {
+                    setTransferStep('setPin');
+                    setShowTransfer(true);
+                  });
+                  return;
+                }
                 setShowTransfer(true);
               }}
               activeOpacity={0.8}
@@ -490,6 +523,17 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  pinNotice: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pinNoticeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
   },
   actionsContainer: { marginBottom: 28 },
   actionsRow: {
