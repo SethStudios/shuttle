@@ -85,6 +85,7 @@ export default function TabLayout() {
       <Tabs.Screen name="history" options={{ title: 'Tickets' }} />
       <Tabs.Screen name="wallet" options={{ title: 'Wallet', href: null }} />
       <Tabs.Screen name="wallet-topup" options={{ title: 'Add Funds' }} />
+      <Tabs.Screen name="wallet-set-pin" options={{ title: 'Set Wallet PIN' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
     </Tabs>
   );

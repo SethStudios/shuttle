@@ -238,9 +238,7 @@ export default function WalletScreen() {
               onPress={() => {
                 if (!user) return;
                 if (!hasPin) {
-                  showAlert('Set PIN first', 'Please create a 4-digit PIN before you can transfer funds.', 'warning', () => {
-                    setShowTransfer(true);
-                  });
+                  router.push('/wallet-set-pin' as any);
                   return;
                 }
                 setShowTransfer(true);
