@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, Platform,
-  TextInput,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -10,12 +9,10 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { UniAbujaGreen, AppleShadows } from '@/constants/theme';
+import { UniAbujaGreen } from '@/constants/theme';
 import { AppleButton } from '@/components/ui/Apple';
 
 const GREEN = UniAbujaGreen[700];
-
-const TOP_UP_AMOUNTS = [1000, 2000, 5000, 10000];
 
 export default function WalletScreen() {
   const insets = useSafeAreaInsets();
@@ -24,7 +21,6 @@ export default function WalletScreen() {
 
   const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [topUpLoading, setTopUpLoading] = useState(false);
   const [transferLoading, setTransferLoading] = useState(false);
 
   // Transfer flow state
@@ -34,10 +30,6 @@ export default function WalletScreen() {
   const [transferAmount, setTransferAmount] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [transferPin, setTransferPin] = useState('');
-
-  // Top up state
-  const [selectedTopUpAmount, setSelectedTopUpAmount] = useState<number | null>(null);
-  const [topUpReference, setTopUpReference] = useState('');
 
   // Fetch wallet balance
   const fetchBalance = useCallback(async () => {
@@ -60,33 +52,6 @@ export default function WalletScreen() {
   useEffect(() => {
     fetchBalance();
   }, [fetchBalance]);
-
-  // ── Top up ──
-  const handleTopUp = async () => {
-    if (!selectedTopUpAmount) return;
-    setTopUpLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('wallet-top-up', {
-        body: { amount: selectedTopUpAmount },
-      });
-      if (error) throw new Error(error.message || 'Top up failed');
-      if (!data?.success) throw new Error(data?.error || 'Top up initialization failed');
-      setTopUpReference(data.data.reference);
-      router.push({
-        pathname: '/payment',
-        params: {
-          walletTopUp: 'true',
-          amount: String(selectedTopUpAmount),
-          reference: data.data.reference,
-          authorizationUrl: data.data.authorization_url,
-        } as any,
-      });
-    } catch (err: any) {
-      Alert.alert('Top up failed', err?.message || 'Could not start top up. Try again.');
-    } finally {
-      setTopUpLoading(false);
-    }
-  };
 
   // ── Transfer flow ──
   const lookupRecipient = async () => {
@@ -183,58 +148,42 @@ export default function WalletScreen() {
           <Text style={[styles.title, { textAlign: 'center' }]}>Wallet</Text>
         </View>
 
-        {/* ATM-style bank card */}
-        <View style={styles.atmCard}>
-          <Image source={require('@/assets/images/icon.png')} style={styles.cardImage} />
-          <MaterialIcons name="account-balance-wallet" size={24} color="rgba(255,255,255,0.9)" />
-          <Text style={styles.cardLabel}>Wallet Balance</Text>
-          <Text style={styles.cardAmount}>₦{balance.toFixed(2)}</Text>
-          <Text style={styles.cardSubtitle}>Available Balance</Text>
-        </View>
-
-        {/* Top up amounts */}
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Add Funds</Text>
-          <View style={styles.amountRow}>
-            {TOP_UP_AMOUNTS.map((amt) => (
-              <TouchableOpacity
-                key={amt}
-                style={[styles.amountBtn, selectedTopUpAmount === amt && styles.amountBtnSelected]}
-                onPress={() => setSelectedTopUpAmount(selectedTopUpAmount === amt ? null : amt)}
-              >
-                <Text style={[styles.amountText, selectedTopUpAmount === amt && styles.amountTextSelected]}>
-                  ₦{amt.toLocaleString()}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        {/* Balance card */}
+        <View style={styles.balanceCard}>
+          <MaterialIcons name="account-balance-wallet" size={28} color="#FFFFFF" />
+          <View style={styles.balanceInfo}>
+            <Text style={styles.balanceLabel}>Available Balance</Text>
+            <Text style={styles.balanceAmount}>₦{balance.toFixed(2)}</Text>
           </View>
-          <AppleButton
-            title="Top up wallet"
-            loading={topUpLoading}
-            disabled={!selectedTopUpAmount}
-            onPress={handleTopUp}
-            variant="primary"
-            style={{ marginTop: 16 }}
-          />
         </View>
 
-        {/* Transfer */}
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Send Money</Text>
-          <AppleButton
-            title="Transfer to another user"
-            loading={transferLoading}
-            onPress={() => {
-              if (!user) return;
-              setShowTransfer(true);
-            }}
-            variant="plain"
-            style={{ marginTop: 8 }}
-          />
+        {/* Action buttons */}
+        <View style={styles.actionsContainer}>
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => router.push('/wallet-topup' as any)}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="add" size={24} color="#FFFFFF" />
+              <Text style={styles.actionBtnText}>Add funds</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => {
+                if (!user) return;
+                setShowTransfer(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="send" size={24} color="#FFFFFF" />
+              <Text style={styles.actionBtnText}>Transfer</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Recent Transactions */}
-        <View style={styles.sectionRow}>
+        <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
           <View style={styles.emptyList}>
             <MaterialIcons name="receipt" size={32} color="#8E8E93" />
@@ -260,8 +209,7 @@ export default function WalletScreen() {
                 <Text style={styles.modalStepTitle}>Recipient Matric Number</Text>
                 <View style={styles.inputRow}>
                   <MaterialIcons name="school" size={20} color="#8E8E93" />
-                  <TextInput
-                    style={styles.textInput}
+                  <TextInputStyled
                     value={recipientMatric}
                     onChangeText={setRecipientMatric}
                     placeholder="Enter matric number"
@@ -295,8 +243,7 @@ export default function WalletScreen() {
                 <Text style={styles.modalStepTitle}>Transfer Amount</Text>
                 <View style={styles.inputRow}>
                   <Text style={styles.currencyPrefix}>₦</Text>
-                  <TextInput
-                    style={styles.textInput}
+                  <TextInputStyled
                     value={transferAmount}
                     onChangeText={setTransferAmount}
                     placeholder="0"
@@ -408,71 +355,82 @@ export default function WalletScreen() {
   );
 }
 
+// ── TextInput component ──
+import { TextInput } from 'react-native';
+
+function TextInputStyled(props: {
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder?: string;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  keyboardType?: 'numeric' | 'default';
+}) {
+  return (
+    <TextInput
+      style={styles.textInput}
+      value={props.value}
+      onChangeText={props.onChangeText}
+      placeholder={props.placeholder}
+      autoCapitalize={props.autoCapitalize}
+      keyboardType={props.keyboardType}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F2F2F7' },
   body: { paddingHorizontal: 20 },
-  nav: { marginBottom: 20 },
+  nav: { marginBottom: 24 },
   title: { fontSize: 32, fontWeight: '800', color: '#1C1C1E', letterSpacing: -0.8, textAlign: 'center' },
-  atmCard: {
+  balanceCard: {
     backgroundColor: GREEN,
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 20,
+    borderRadius: 28,
+    padding: 28,
+    marginBottom: 28,
     width: '100%',
-    position: 'relative',
-    overflow: 'hidden',
-    ...AppleShadows.greenGlow,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  cardImage: {
-    position: 'absolute',
-    right: -40,
-    bottom: -40,
-    width: 140,
-    height: 140,
-    opacity: 0.12,
+  balanceInfo: {
+    flex: 1,
   },
-  cardLabel: {
-    fontSize: 13,
+  balanceLabel: {
+    fontSize: 14,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.85)',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  cardAmount: {
-    fontSize: 44,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    letterSpacing: 0.8,
     marginBottom: 6,
   },
-  cardSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.85)',
-    fontWeight: '600',
+  balanceAmount: {
+    fontSize: 48,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
-  sectionRow: {
-    flexDirection: 'column',
-    gap: 10,
-    marginBottom: 20,
+  actionsContainer: { marginBottom: 28 },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#6B7280', marginBottom: 8 },
-  amountRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  amountBtn: {
+  actionBtn: {
     flex: 1,
-    minWidth: 70,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-  },
-  amountBtnSelected: {
     backgroundColor: GREEN,
-    borderColor: GREEN,
+    borderRadius: 20,
+    paddingVertical: 18,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 60,
   },
-  amountText: { fontSize: 14, fontWeight: '700', color: '#1C1C1E' },
-  amountTextSelected: { color: '#FFFFFF' },
-  emptyList: { alignItems: 'center', paddingVertical: 30, gap: 8 },
+  actionBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  sectionContainer: { marginBottom: 20 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#6B7280', marginBottom: 12 },
+  emptyList: { alignItems: 'center', paddingVertical: 40, gap: 8 },
   emptyText: { fontSize: 15, color: '#6B7280', fontWeight: '600' },
   // Modal
   modalBackdrop: {
