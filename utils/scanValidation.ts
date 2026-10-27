@@ -70,10 +70,19 @@ export function pushScanHistory(code: string, result: ScanEntry['result']): void
 
 /** Build the validation report from a booking row. */
 export function buildScanReport(b: any): ScanReport {
+  if (!b) {
+    return {
+      status: 'invalid',
+      title: 'Invalid ticket',
+      message: 'Ticket data is missing or invalid.',
+    };
+  }
   const prof = b.profiles || {};
   const name = prof.full_name || 'Rider';
   const matric = prof.matric_number ? ` • ${prof.matric_number}` : '';
-  const route = b.route || (b.route_direction === 'mini-to-main' ? 'Mini Campus → Main Campus' : 'Main Campus → Mini Campus');
+  const route =
+    b.route ||
+    (b?.route_direction === 'mini-to-main' ? 'Mini Campus → Main Campus' : 'Main Campus → Mini Campus');
   const queue = b.queue_number ? `#${String(b.queue_number).padStart(2, '0')}` : '—';
   const base = {
     name: `${name}${matric}`,
